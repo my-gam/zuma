@@ -1,6 +1,6 @@
 {
   "name": "@my-games/zuma-vue",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Vue 3 SFC adapter for the @my-games/zuma-core engine — Composition API, canvas stage, mobile-ready touch aiming. 祖玛的 Vue 3 组件适配器。",
   "type": "module",
   "main": "./dist/index.js",

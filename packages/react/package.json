@@ -1,6 +1,6 @@
 {
   "name": "@my-games/zuma-react",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "React 18/19 component adapter for @my-games/zuma-core — function component + hooks + forwardRef, mobile-ready. 祖玛的 React 组件适配器。",
   "type": "module",
   "main": "./dist/index.js",
