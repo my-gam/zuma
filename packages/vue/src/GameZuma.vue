@@ -149,12 +149,17 @@ function onPointerDown(event: PointerEvent): void {
   draw();
 }
 
+/**
+ * 悬停即跟随瞄准（桌面端）。
+ *
+ * 之前只在按下后才跟随，鼠标党会觉得炮口不动、以为坏了（2026-10-25 反馈）。
+ * 触屏没有 hover，依旧是「按下拖动定角、松手发射」，两种输入互不干扰。
+ */
 function onPointerMove(event: PointerEvent): void {
-  if (!dragging) return;
   const world = toWorld(event.clientX, event.clientY);
   if (!world) return;
   engine.aimAtWorld(world);
-  draw();
+  if (dragging) draw();
 }
 
 function onPointerUp(event: PointerEvent): void {
@@ -331,6 +336,9 @@ defineExpose<GameZumaHandle>({
         <p class="game-zuma-overlay-score">
           本关得分 {{ state.score }}
           <template v-if="state.settled">（含结算 {{ state.settled }}）</template>
+          <template v-if="state.phase === 'won' && state.level < levelCount && state.autoNextMs > 0">
+            · {{ Math.max(1, Math.ceil((state.autoNextMs - state.overMs) / 1000)) }} 秒后自动进入下一关
+          </template>
         </p>
         <div class="game-zuma-overlay-actions">
           <button
@@ -350,7 +358,7 @@ defineExpose<GameZumaHandle>({
             class="game-zuma-button game-zuma-button-primary"
             @click="selectLevel(state.level + 1)"
           >
-            下一关
+            立刻下一关
           </button>
         </div>
       </div>

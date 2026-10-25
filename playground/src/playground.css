@@ -134,8 +134,11 @@ body {
   gap: 10px;
 }
 
-/* Vanilla tab 里的画布容器要复刻组件样式里的 1:1 舞台比例 */
+/* Vanilla tab 里的画布容器要复刻组件样式里的 1:1 舞台比例；
+   position: relative 不能省 —— 结算遮罩是 absolute + inset: 0，
+   没有定位祖先就会贴到整个页面而不是画布上。 */
 .pg-vanilla-stage {
+  position: relative;
   width: 100%;
   aspect-ratio: 1 / 1;
   max-height: 72dvh;

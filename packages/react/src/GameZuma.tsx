@@ -207,12 +207,17 @@ export const GameZuma = forwardRef<GameZumaHandle, GameZumaProps>(function GameZ
     draw();
   };
 
+  /**
+   * 悬停即跟随瞄准（桌面端）。
+   *
+   * 之前只在按下后才跟随，鼠标党会觉得炮口不动、以为坏了（2026-10-25 反馈）。
+   * 触屏没有 hover，依旧是「按下拖动定角、松手发射」，两种输入互不干扰。
+   */
   const handlePointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    if (!draggingRef.current) return;
     const world = toWorld(event.clientX, event.clientY);
     if (!world) return;
     game.aimAt(world);
-    draw();
+    if (draggingRef.current) draw();
   };
 
   const handlePointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -362,6 +367,9 @@ export const GameZuma = forwardRef<GameZumaHandle, GameZumaProps>(function GameZ
             <p className="game-zuma-overlay-score">
               本关得分 {state.score}
               {state.settled ? `（含结算 ${state.settled}）` : ''}
+              {state.phase === 'won' && state.level < LEVEL_COUNT && state.autoNextMs > 0
+                ? ` · ${Math.max(1, Math.ceil((state.autoNextMs - state.overMs) / 1000))} 秒后自动进入下一关`
+                : ''}
             </p>
             <div className="game-zuma-overlay-actions">
               {state.phase === 'paused' ? (
@@ -382,7 +390,7 @@ export const GameZuma = forwardRef<GameZumaHandle, GameZumaProps>(function GameZ
                   className="game-zuma-button game-zuma-button-primary"
                   onClick={() => selectLevel(state.level + 1)}
                 >
-                  下一关
+                  立刻下一关
                 </button>
               ) : null}
             </div>
