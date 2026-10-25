@@ -1,0 +1,207 @@
+/**
+ * Playground 外壳样式（`pg-*` 前缀，与包内组件的 `game-zuma-*` 严格分开）。
+ *
+ * 这里的样式只服务演示站本身：页面骨架、tab 切换、说明文字。游戏本体的排版全在
+ * `@my-games/zuma-core/style.css` 里，两个 tab 共用同一份，所以画面可以横向对比。
+ */
+
+:root {
+  color-scheme: dark;
+  --pg-bg: #0b0f18;
+  --pg-panel: #141b2a;
+  --pg-line: #253049;
+  --pg-text: #e8eefc;
+  --pg-dim: #93a3c4;
+  --pg-accent: #1f74d0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--pg-bg);
+  color: var(--pg-text);
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  line-height: 1.6;
+  /* iOS 橡皮筋滚动时不要把 HUD 顶走 */
+  overscroll-behavior-y: none;
+}
+
+.pg-shell {
+  max-width: 860px;
+  margin: 0 auto;
+  /* 刘海与手势条避让 */
+  padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pg-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pg-title {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: 0.01em;
+}
+
+.pg-subtitle,
+.pg-hint,
+.pg-note,
+.pg-footer {
+  margin: 0;
+  color: var(--pg-dim);
+  font-size: 14px;
+}
+
+.pg-subtitle code,
+.pg-note code,
+.pg-footer code {
+  color: var(--pg-text);
+  background: var(--pg-panel);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 0.92em;
+}
+
+.pg-hint {
+  min-height: 1.4em;
+}
+
+.pg-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--pg-line);
+  padding-bottom: 8px;
+}
+
+.pg-tab {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 10px 10px 0 0;
+  background: transparent;
+  color: var(--pg-dim);
+  font: inherit;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+
+.pg-tab[aria-selected='true'] {
+  background: var(--pg-panel);
+  border-color: var(--pg-line);
+  color: var(--pg-text);
+}
+
+.pg-level-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--pg-dim);
+}
+
+.pg-select {
+  appearance: none;
+  background: var(--pg-panel);
+  color: var(--pg-text);
+  border: 1px solid var(--pg-line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  min-height: 44px;
+}
+
+.pg-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pg-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Vanilla tab 里的画布容器要复刻组件样式里的 1:1 舞台比例 */
+.pg-vanilla-stage {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-height: 72dvh;
+  margin-inline: auto;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #101521;
+  touch-action: none;
+}
+
+.pg-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.pg-button {
+  appearance: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--pg-line);
+  border-radius: 12px;
+  background: var(--pg-panel);
+  color: var(--pg-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.pg-button:active {
+  transform: translateY(1px);
+}
+
+@media (max-width: 420px) {
+  .pg-title {
+    font-size: 20px;
+  }
+
+  .pg-subtitle,
+  .pg-note {
+    font-size: 13px;
+  }
+
+  .pg-tab {
+    flex: 1 1 auto;
+    padding: 10px 8px;
+  }
+
+  .pg-vanilla-stage {
+    max-height: 62dvh;
+    border-radius: 12px;
+  }
+
+  .pg-select,
+  .pg-button {
+    flex: 1 1 auto;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .pg-shell {
+    max-width: 100%;
+  }
+
+  .pg-vanilla-stage {
+    max-height: 86dvh;
+  }
+}
