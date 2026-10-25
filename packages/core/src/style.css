@@ -1,0 +1,17 @@
+/*
+ * @my-games/zuma-core —— 0.0.0 占位样式表（单数命名 ./style.css）。
+ *
+ * 空骨架阶段只放最小基类，保证三包各自构建能产出非空 dist/index.css
+ * （verify:dist 守卫要求 vue/react 的 index.css 存在且非 0 字节）。
+ * 真实舞台样式（Canvas 自适应尺寸与纵横比、HUD 分数/关卡条、触控瞄准层）随引擎补入。
+ */
+
+.game-zuma {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  color: #1f2d3d;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}

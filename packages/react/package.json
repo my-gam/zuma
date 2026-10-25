@@ -1,0 +1,73 @@
+{
+  "name": "@my-games/zuma-react",
+  "version": "0.0.0",
+  "description": "React 18/19 component adapter for @my-games/zuma-core — function component + hooks + forwardRef, mobile-ready. 祖玛的 React 组件适配器。",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./style.css": "./dist/index.css",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "vite build --mode lib",
+    "dev": "vite build --mode lib --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0 || ^19.0.0",
+    "react-dom": "^18.2.0 || ^19.0.0"
+  },
+  "dependencies": {
+    "@my-games/zuma-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vite-plugin-dts": "^5.1.2"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "zuma",
+    "react",
+    "react18",
+    "react19",
+    "react-component",
+    "hooks",
+    "forwardref",
+    "game",
+    "arcade",
+    "canvas",
+    "touch",
+    "h5",
+    "mobile-web"
+  ],
+  "license": "MIT",
+  "author": { "name": "xyj2156" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/my-gam/zuma.git",
+    "directory": "packages/react"
+  },
+  "homepage": "https://github.com/my-gam/zuma/tree/main/packages/react#readme",
+  "bugs": { "url": "https://github.com/my-gam/zuma/issues" },
+  "publishConfig": { "access": "public" }
+}

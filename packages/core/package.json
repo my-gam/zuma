@@ -1,0 +1,76 @@
+{
+  "name": "@my-games/zuma-core",
+  "version": "0.0.0",
+  "description": "Framework-agnostic Zuma (marble-chain) game engine with a canvas renderer that takes only a 2D context; ships ESM, CJS, UMD and IIFE builds. 无框架依赖的祖玛引擎，四格式产出。",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "browser": "./dist/index.iife.js",
+  "types": "./dist/index.d.ts",
+  "unpkg": "./dist/index.iife.js",
+  "jsdelivr": "./dist/index.iife.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./umd": "./dist/index.umd.js",
+    "./iife": "./dist/index.iife.js",
+    "./style.css": "./src/style.css",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "sideEffects": ["./src/style.css"],
+  "scripts": {
+    "build": "vite build --mode lib",
+    "dev": "vite build --mode lib --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vite-plugin-dts": "^5.1.2",
+    "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "zuma",
+    "game",
+    "game-engine",
+    "arcade",
+    "marble-chain",
+    "canvas",
+    "renderer",
+    "touch",
+    "level",
+    "typescript",
+    "esm",
+    "cjs",
+    "umd",
+    "iife",
+    "browser",
+    "h5",
+    "mobile-web",
+    "zero-dependencies",
+    "cross-framework"
+  ],
+  "license": "MIT",
+  "author": { "name": "xyj2156" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/my-gam/zuma.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/my-gam/zuma/tree/main/packages/core#readme",
+  "bugs": { "url": "https://github.com/my-gam/zuma/issues" },
+  "publishConfig": { "access": "public" }
+}

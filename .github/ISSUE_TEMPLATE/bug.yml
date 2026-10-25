@@ -1,0 +1,79 @@
+name: "🐛 Bug report · 缺陷反馈"
+description: "Create a report to help us improve · 提交一个可复现的缺陷"
+title: "[bug] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！请尽量给出可复现的最短代码 / 步骤。
+        **安全漏洞请勿在此贴出**，走 [SECURITY.md](../SECURITY.md) 的私密渠道。
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 发生了什么 · What happened
+      description: 简明描述问题（现象、报错文本、意外行为）
+      placeholder: |
+        A clear and concise description.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤 · Reproduction
+      description: 一步一步的复现路径，最好带最小 sandbox（StackBlitz / CodeSandbox / 可运行的 HTML）
+      value: |
+        1. Go to '...'
+        2. Click '...'
+        3. Scroll down to '...'
+        4. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为 · Expected behavior
+      description: 你原本以为会发生什么
+    validations:
+      required: true
+  - type: dropdown
+    id: package
+    attributes:
+      label: 影响的包 · Which package
+      multiple: true
+      options:
+        - "@my-games/zuma-core"
+        - "@my-games/zuma-vue"
+        - "@my-games/zuma-react"
+        - "playground"
+        - "build toolchain / CI"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 版本 · Version
+      description: 例如 `@my-games/zuma-core@0.1.0`
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: 环境 · Environment
+      description: 浏览器 / Node / pnpm / OS 版本
+      value: |
+        - OS: [e.g. Windows 11 26200]
+        - Node: [e.g. v24.22.0]
+        - pnpm: [e.g. 12.14.0]
+        - Browser (if UI issue): [e.g. Chrome 129]
+        - Build tool: [e.g. Vite 8.3.5]
+    validations:
+      required: true
+  - type: textarea
+    id: additional
+    attributes:
+      label: 其他线索 · Additional context
+      description: 截图、stack trace、相关 issue 编号等
+    validations:
+      required: false

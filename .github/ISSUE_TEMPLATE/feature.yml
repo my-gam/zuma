@@ -1,0 +1,53 @@
+name: "✨ Feature request · 功能建议"
+description: "Suggest an idea for this project · 提一个想法"
+title: "[feat] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        欢迎建议！请先看看 [existing issues](../issues?q=is%3Aissue) 避免重复。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决什么问题 · Problem statement
+      description: 清晰说明这个建议想解决的痛点；不带解决方案最好
+      placeholder: |
+        I'm always frustrated when ...
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: 建议的做法 · Proposed solution
+      description: 你希望它长什么样？接口 / prop / API 形状可以给几行代码
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 考虑过的替代方案 · Alternatives considered
+      description: 有没有别的做法能达到同样目的？为什么不如你的建议
+    validations:
+      required: false
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 影响面 · Scope
+      multiple: true
+      options:
+        - "@my-games/zuma-core (引擎)"
+        - "@my-games/zuma-vue (组件)"
+        - "@my-games/zuma-react (组件)"
+        - "playground"
+        - "build toolchain"
+        - "docs"
+    validations:
+      required: true
+  - type: textarea
+    id: additional
+    attributes:
+      label: 其他上下文 · Additional context
+      description: 截图、链接、类似库的做法等
+    validations:
+      required: false
