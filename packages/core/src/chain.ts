@@ -217,10 +217,11 @@ export function insertMarble(chain: Chain, options: InsertOptions): Chain {
  *
  * 从头部开始单向传播：头球不动，后面的球被前一颗「拉」过来，但不超过 `maxDelta`，
  * 所以一帧内空隙只会收拢有限距离（帧率无关的运动由状态机按 `speed × dt` 传进来）。
+ * 传 `Infinity` 表示「瞬间完全闭合」，供离线结算与单测用。
  */
 export function closeGaps(chain: Chain, maxDelta: number): Chain {
-  if (!Number.isFinite(maxDelta) || maxDelta < 0) {
-    throw new RangeError(`maxDelta 必须是 ≥ 0 的有限数，收到 ${maxDelta}`);
+  if (Number.isNaN(maxDelta) || maxDelta < 0) {
+    throw new RangeError(`maxDelta 必须是 ≥ 0 的数（可用 Infinity 表示一次闭合），收到 ${maxDelta}`);
   }
   // 已紧贴就不新建快照：状态机每帧都会调它，白抄一份数组会给 subscribe 制造无意义的新引用。
   if (maxDelta === 0 || chain.marbles.length < 2 || !hasGaps(chain)) return chain;

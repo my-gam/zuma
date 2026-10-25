@@ -33,6 +33,26 @@ export {
 } from './chain';
 export type { Chain, CreateChainOptions, InsertOptions, Marble, MarbleId } from './chain';
 
+export { collapseChain, findRuns, hasRun, removeRuns } from './match';
+export type { CollapseEvent, CollapseResult, MatchRun } from './match';
+
+export {
+  ACCURACY_BONUS_MAX,
+  BASE_POINTS_PER_MARBLE,
+  CLEAR_PENALTY_PER_MARBLE,
+  COMBO_MULTIPLIER_STEP,
+  EXTRA_RUN_BONUS_PER_MARBLE,
+  FAR_SHOT_BONUS_PER_STEP,
+  FAR_SHOT_DISTANCE_STEP,
+  MIN_MATCH_RUN,
+  PERFECT_CLEAR_BONUS,
+  clearBonus,
+  comboMultiplier,
+  farShotPoints,
+  matchPoints,
+  scoreMatch
+} from './score';
+
 export {
   DEFAULT_SAMPLES_PER_SEGMENT,
   clampTrackDist,
