@@ -29,22 +29,49 @@ export interface View {
   readonly height: number;
 }
 
-/** 一种颜色的球怎么画：三色 + 高光，纯色相太单调，全渐变又糊。 */
+/** 一种颜色的球怎么画：高光、主体、暗边、记号色。 */
 export interface MarblePaint {
+  /** 高光侧（渐变起点）。 */
   readonly light: string;
+  /** **主体色**：球面绝大部分面积是它，颜色辨识全靠这一位。 */
   readonly mid: string;
+  /** 外圈阴影（渐变终点 + 描边），只占边缘一小圈。 */
   readonly dark: string;
-  readonly rim: string;
+  /** 形状记号的颜色，取主体色的深调，压在 mid 上仍看得清。 */
+  readonly mark: string;
 }
 
-/** 每种颜色的程序化配色。 */
+/**
+ * 每种颜色的程序化配色。
+ *
+ * 教训（2026-10-25 真机反馈「看不到球的颜色」）：原方案是 `light → mid → dark` 三段渐变，
+ * 且 mid 落在 **55% 半径**处 —— 于是 0.55r 到 1r 之间那 **约 70% 的球面面积全在变暗坡上**，
+ * 手机上几个球看过去就是一堆暗色疙瘩。现在 mid 从 0.42r 一路平铺到 0.82r，
+ * 变暗只发生在最后 18% 的边沿，主体面积保持颜色纯度。
+ */
 export const MARBLE_PAINT: Readonly<Record<MarbleColor, MarblePaint>> = {
-  red: { light: '#ff9a8a', mid: '#e0331f', dark: '#7a0f08', rim: '#ffd9d0' },
-  yellow: { light: '#fff3b0', mid: '#f0b90b', dark: '#8a6200', rim: '#fff8d6' },
-  green: { light: '#b6f5c0', mid: '#1fae4b', dark: '#0a5522', rim: '#d8ffe1' },
-  blue: { light: '#b8ddff', mid: '#1f74d0', dark: '#0a3364', rim: '#dbeeff' },
-  purple: { light: '#e6c2ff', mid: '#8b2fd0', dark: '#43106a', rim: '#f0dcff' },
-  orange: { light: '#ffd7a8', mid: '#ef7a12', dark: '#8a3d00', rim: '#ffe7cb' }
+  red: { light: '#ff9a8a', mid: '#e0331f', dark: '#7a0f08', mark: '#5c0a05' },
+  yellow: { light: '#fff3b0', mid: '#f0b90b', dark: '#8a6200', mark: '#6b4a00' },
+  green: { light: '#b6f5c0', mid: '#1fae4b', dark: '#0a5522', mark: '#07401a' },
+  blue: { light: '#b8ddff', mid: '#1f74d0', dark: '#0a3364', mark: '#052447' },
+  purple: { light: '#e6c2ff', mid: '#8b2fd0', dark: '#43106a', mark: '#2d0b47' },
+  orange: { light: '#ffd7a8', mid: '#ef7a12', dark: '#8a3d00', mark: '#5f2a00' }
+};
+
+/**
+ * 颜色之外的**形状**记号：同色必同形状、异色形状互不相同。
+ *
+ * 给色盲用户，也给「屏幕反光下认不出色相」的场景兜底 —— 配对判断可以完全不看颜色。
+ */
+export type MarbleGlyph = 'dot' | 'ring' | 'triangle' | 'square' | 'diamond' | 'cross';
+
+export const MARBLE_GLYPH: Readonly<Record<MarbleColor, MarbleGlyph>> = {
+  red: 'dot',
+  yellow: 'triangle',
+  green: 'square',
+  blue: 'diamond',
+  purple: 'cross',
+  orange: 'ring'
 };
 
 /** 绘制样式覆盖项。 */
@@ -56,6 +83,8 @@ export interface DrawStyle {
   readonly launcherEdge: string;
   readonly aim: string;
   readonly hole: string;
+  /** 装填球外的「待发」环；上一发还在飞时会自动压暗表示冷却。 */
+  readonly ready: string;
   /** 瞄准指示线是否画（结算屏可以关掉）。 */
   readonly showAim: boolean;
   /** 轨道凹槽宽度相对球直径的倍率。 */
@@ -76,6 +105,7 @@ export const DEFAULT_STYLE: DrawStyle = {
   launcherEdge: '#8fa4cc',
   aim: 'rgba(255,255,255,0.55)',
   hole: '#05070c',
+  ready: 'rgba(255,255,255,0.85)',
   showAim: true,
   grooveRatio: 1.35,
   burstMs: 420
@@ -113,6 +143,7 @@ export interface DrawContext {
   moveTo(x: number, y: number): void;
   lineTo(x: number, y: number): void;
   arc(x: number, y: number, r: number, start: number, end: number): void;
+  rect(x: number, y: number, w: number, h: number): void;
   fill(): void;
   stroke(): void;
   fillRect(x: number, y: number, w: number, h: number): void;
@@ -178,12 +209,13 @@ export function toScreenSize(view: View, size: number): number {
   return size * view.scale;
 }
 
-/** 画一颗球：底色圆 + 偏心径向渐变 + 顶部高光 + 外圈描边。 */
+/** 画一颗球：主体保色的渐变 + 深色描边 + 形状记号。 */
 function drawMarble(
   ctx: DrawContext,
   center: Vec2,
   radius: number,
   paint: MarblePaint,
+  glyph: MarbleGlyph,
   alpha = 1
 ): void {
   ctx.save();
@@ -191,25 +223,91 @@ function drawMarble(
   ctx.beginPath();
   ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
   const gradient = ctx.createRadialGradient(
-    center.x - radius * 0.35,
-    center.y - radius * 0.4,
-    radius * 0.12,
+    center.x - radius * 0.28,
+    center.y - radius * 0.32,
+    radius * 0.1,
     center.x,
     center.y,
     radius
   );
+  // mid 从 0.42r 平铺到 0.82r：球面主体保持颜色纯度，变暗只发生在最外 18% 的边沿。
   gradient.addColorStop(0, paint.light);
-  gradient.addColorStop(0.55, paint.mid);
+  gradient.addColorStop(0.42, paint.mid);
+  gradient.addColorStop(0.82, paint.mid);
   gradient.addColorStop(1, paint.dark);
   ctx.fillStyle = gradient;
   ctx.fill();
-  ctx.lineWidth = Math.max(0.5, radius * 0.14);
-  ctx.strokeStyle = paint.rim;
+  // 深色描边而不是浅色：暗底上用浅色描边会让相邻球糊成一圈光边，深色才能把同色球彼此分开。
+  ctx.lineWidth = Math.max(0.6, radius * 0.16);
+  ctx.strokeStyle = paint.dark;
   ctx.stroke();
+  drawGlyph(ctx, glyph, center, radius, paint.mark, alpha);
+  ctx.restore();
+}
+
+/**
+ * 球心的形状记号（色盲与反光场景的兜底）。
+ *
+ * 只用 `fill` / `stroke` 与直线段，不依赖字体，也不引入图片。
+ */
+function drawGlyph(
+  ctx: DrawContext,
+  kind: MarbleGlyph,
+  center: Vec2,
+  radius: number,
+  color: string,
+  alpha: number
+): void {
+  const s = radius * 0.42;
+  const { x, y } = center;
+  ctx.save();
+  ctx.globalAlpha = alpha * 0.9;
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(0.6, radius * 0.16);
   ctx.beginPath();
-  ctx.arc(center.x - radius * 0.32, center.y - radius * 0.36, radius * 0.24, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(255,255,255,0.7)';
-  ctx.fill();
+  switch (kind) {
+    case 'dot': {
+      ctx.arc(x, y, s * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+    case 'ring': {
+      ctx.arc(x, y, s * 0.62, 0, Math.PI * 2);
+      ctx.stroke();
+      break;
+    }
+    case 'triangle': {
+      ctx.moveTo(x, y - s * 0.74);
+      ctx.lineTo(x + s * 0.68, y + s * 0.54);
+      ctx.lineTo(x - s * 0.68, y + s * 0.54);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    }
+    case 'square': {
+      ctx.rect(x - s * 0.56, y - s * 0.56, s * 1.12, s * 1.12);
+      ctx.fill();
+      break;
+    }
+    case 'diamond': {
+      ctx.moveTo(x, y - s * 0.82);
+      ctx.lineTo(x + s * 0.7, y);
+      ctx.lineTo(x, y + s * 0.82);
+      ctx.lineTo(x - s * 0.7, y);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    }
+    case 'cross': {
+      ctx.moveTo(x - s * 0.72, y);
+      ctx.lineTo(x + s * 0.72, y);
+      ctx.moveTo(x, y - s * 0.72);
+      ctx.lineTo(x, y + s * 0.72);
+      ctx.stroke();
+      break;
+    }
+  }
   ctx.restore();
 }
 
@@ -235,7 +333,8 @@ function strokeTrack(ctx: DrawContext, scene: Scene, color: string, widthRatio: 
 /**
  * 画一整帧。
  *
- * 顺序即层级：背景 → 轨道边 → 轨道槽 → 洞口 → 彩球 → 爆点 → 弹球 → 发射器 → 瞄准线。
+ * 顺序即层级：背景 → 轨道边 → 轨道槽 → 洞口 → 彩球 → 爆点 → 发射器与瞄准线 →
+ * 装填球（含待发环）→ 下一发预览 → 飞行弹球。装填与预览画在弹球之前，保证飞行中的球永远在最上层。
  * 调用前宿主必须已按 devicePixelRatio 设好变换矩阵，本函数只用 CSS 像素坐标。
  */
 export function drawScene(ctx: DrawContext, scene: Scene, style: DrawStyle = DEFAULT_STYLE): void {
@@ -261,7 +360,13 @@ export function drawScene(ctx: DrawContext, scene: Scene, style: DrawStyle = DEF
   for (const marble of state.chain.marbles) {
     if (marble.dist < 0) continue;
     const pose = poseAt(scene.track, marble.dist);
-    drawMarble(ctx, toScreen(view, pose), radius, MARBLE_PAINT[marble.color]);
+    drawMarble(
+      ctx,
+      toScreen(view, pose),
+      radius,
+      MARBLE_PAINT[marble.color],
+      MARBLE_GLYPH[marble.color]
+    );
   }
 
   // 爆点：按存活时间放大并淡出（淡出时长与状态机摘掉它的时长必须一致，见 DrawStyle.burstMs）
@@ -276,22 +381,12 @@ export function drawScene(ctx: DrawContext, scene: Scene, style: DrawStyle = DEF
     ctx.beginPath();
     ctx.arc(at.x, at.y, radius * (1 + life * 1.6), 0, Math.PI * 2);
     ctx.lineWidth = Math.max(0.5, radius * 0.2 * (1 - life));
-    ctx.strokeStyle = MARBLE_PAINT[burst.color].rim;
+    ctx.strokeStyle = MARBLE_PAINT[burst.color].light;
     ctx.stroke();
     ctx.restore();
   }
 
-  // 飞行中的弹球
-  if (state.projectile) {
-    drawMarble(
-      ctx,
-      toScreen(view, state.projectile.pos),
-      radius,
-      MARBLE_PAINT[state.projectile.color]
-    );
-  }
-
-  // 发射器：底座 + 朝向
+  // 发射器底座 + 瞄准线
   const launcher = toScreen(view, scene.launcher);
   ctx.beginPath();
   ctx.arc(launcher.x, launcher.y, radius * 1.7, 0, Math.PI * 2);
@@ -312,6 +407,51 @@ export function drawScene(ctx: DrawContext, scene: Scene, style: DrawStyle = DEF
     ctx.lineWidth = Math.max(0.5, radius * 0.3);
     ctx.strokeStyle = style.aim;
     ctx.stroke();
+  }
+
+  // 装填球（**当前要打的这颗必须看得见**）：画在发射器口上，外圈一套待发环。
+  // 真机反馈的第一条「不知道打出的球是什么颜色」就是这里漏了 —— 之前只画底座。
+  const loaded = state.queue[0];
+  if (loaded) {
+    drawMarble(
+      ctx,
+      launcher,
+      radius * 1.12,
+      MARBLE_PAINT[loaded],
+      MARBLE_GLYPH[loaded]
+    );
+    ctx.save();
+    ctx.globalAlpha = state.projectile ? 0.35 : 1; // 上一发还在飞的时候压暗，表示冷却中
+    ctx.beginPath();
+    ctx.arc(launcher.x, launcher.y, radius * 1.62, 0, Math.PI * 2);
+    ctx.lineWidth = Math.max(1, radius * 0.18);
+    ctx.strokeStyle = style.ready;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 下一发预览放在画布右上角（螺旋是圆的，四角最空，不会压到轨道）
+  const upcoming = state.queue[1];
+  if (upcoming) {
+    drawMarble(
+      ctx,
+      { x: view.width - radius * 2.2, y: radius * 2.2 },
+      radius * 0.78,
+      MARBLE_PAINT[upcoming],
+      MARBLE_GLYPH[upcoming],
+      0.92
+    );
+  }
+
+  // 飞行中的弹球画在最上层，免得被发射器与装填球盖住
+  if (state.projectile) {
+    drawMarble(
+      ctx,
+      toScreen(view, state.projectile.pos),
+      radius,
+      MARBLE_PAINT[state.projectile.color],
+      MARBLE_GLYPH[state.projectile.color]
+    );
   }
 
   ctx.restore();

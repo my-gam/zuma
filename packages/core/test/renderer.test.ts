@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_STYLE,
+  MARBLE_GLYPH,
   MARBLE_PAINT,
   createView,
   drawScene,
@@ -50,6 +51,10 @@ class CtxRecorder implements DrawContext {
 
   arc(x: number, y: number, r: number): void {
     this.ops.push(`arc(${x.toFixed(1)},${y.toFixed(1)},${r.toFixed(2)})`);
+  }
+
+  rect(x: number, y: number, w: number, h: number): void {
+    this.ops.push(`rect(${x.toFixed(1)},${y.toFixed(1)},${w.toFixed(2)},${h.toFixed(2)})`);
   }
 
   fill(): void {
@@ -162,13 +167,77 @@ describe('createView 视图映射', () => {
 });
 
 describe('drawScene 画了什么', () => {
-  it('每颗可见球画一个渐变球体', () => {
+  it('每颗可见球画一个渐变球体，外加装填球与下一发预览各一颗', () => {
     const game = sampleGame();
     const state = game.getState();
     const ctx = new CtxRecorder();
     drawScene(ctx, sceneFor(game, state));
-    expect(count(ctx, 'gradient(')).toBe(state.chain.marbles.filter((m) => m.dist >= 0).length);
+    const visible = state.chain.marbles.filter((m) => m.dist >= 0).length;
+    expect(count(ctx, 'gradient(')).toBe(visible + 2);
     expect(ctx.depth).toBe(0); // save/restore 配平
+  });
+
+  it('装填球画在发射器口上（看不见的颜色 = 没法玩）', () => {
+    const game = sampleGame();
+    const state = game.getState();
+    const scene = sceneFor(game, state);
+    const ctx = new CtxRecorder();
+    drawScene(ctx, scene);
+    const radius = toScreenSize(scene.view, state.radius);
+    const launcher = toScreen(scene.view, game.getLauncher());
+    // 装填球：半径 1.12 倍球径、圆心正好落在发射器上
+    expect(
+      ctx.ops.some((op) =>
+        op.startsWith(`arc(${launcher.x.toFixed(1)},${launcher.y.toFixed(1)},${(radius * 1.12).toFixed(2)})`)
+      )
+    ).toBe(true);
+    // 待发环：1.62 倍半径的一圈
+    expect(
+      ctx.ops.some((op) =>
+        op.startsWith(`arc(${launcher.x.toFixed(1)},${launcher.y.toFixed(1)},${(radius * 1.62).toFixed(2)})`)
+      )
+    ).toBe(true);
+  });
+
+  it('下一发预览画在画布右上角，不压轨道', () => {
+    const game = sampleGame();
+    const state = game.getState();
+    const scene = sceneFor(game, state, 800, 600);
+    const ctx = new CtxRecorder();
+    drawScene(ctx, scene);
+    const radius = toScreenSize(scene.view, state.radius);
+    expect(
+      ctx.ops.some((op) =>
+        op.startsWith(`arc(${(800 - radius * 2.2).toFixed(1)},${(radius * 2.2).toFixed(1)},${(radius * 0.78).toFixed(2)})`)
+      )
+    ).toBe(true);
+  });
+
+  it('上一发还在飞时待发环压暗（表示冷却中）', () => {
+    const game = sampleGame();
+    const idle = new CtxRecorder();
+    drawScene(idle, sceneFor(game, game.getState()));
+    game.shoot();
+    const busy = new CtxRecorder();
+    drawScene(busy, sceneFor(game, game.getState()));
+    expect(idle.ops).toContain('set:globalAlpha:1.00');
+    expect(busy.ops).toContain('set:globalAlpha:0.35');
+  });
+
+  it('球面主体保持 mid 纯度：渐变里 mid 从 0.42 平铺到 0.82', () => {
+    const game = sampleGame();
+    const ctx = new CtxRecorder();
+    drawScene(ctx, sceneFor(game, game.getState()));
+    const stops = ctx.ops.filter((op) => op.startsWith('stop:'));
+    expect(stops.length).toBeGreaterThanOrEqual(4);
+    // 第一颗球（链头）的四段：light → mid → mid → dark
+    const paint = MARBLE_PAINT[game.getState().chain.marbles[0]!.color];
+    expect(stops.slice(0, 4)).toEqual([
+      `stop:0.00:${paint.light}`,
+      `stop:0.42:${paint.mid}`,
+      `stop:0.82:${paint.mid}`,
+      `stop:1.00:${paint.dark}`
+    ]);
   });
 
   it('倒退到入口外（dist < 0）的球不上屏', () => {
@@ -178,8 +247,9 @@ describe('drawScene 画了什么', () => {
     const state: ZumaState = { ...base, chain: { spacing: base.chain.spacing, marbles: shifted } };
     const ctx = new CtxRecorder();
     drawScene(ctx, sceneFor(game, state));
-    expect(count(ctx, 'gradient(')).toBe(shifted.filter((m) => m.dist >= 0).length);
-    expect(count(ctx, 'gradient(')).toBeLessThan(shifted.length);
+    const visible = shifted.filter((m) => m.dist >= 0).length;
+    expect(count(ctx, 'gradient(')).toBe(visible + 2); // +2 = 装填球 + 下一发预览
+    expect(count(ctx, 'gradient(')).toBeLessThan(shifted.length + 2);
   });
 
   it('飞行中的弹球再多画一颗球', () => {
@@ -255,19 +325,21 @@ describe('drawScene 画了什么', () => {
     const state: ZumaState = { ...base, chain: { spacing: base.chain.spacing, marbles: [] }, phase: 'won' };
     const ctx = new CtxRecorder();
     expect(() => drawScene(ctx, sceneFor(game, state))).not.toThrow();
-    expect(count(ctx, 'gradient(')).toBe(0);
+    expect(count(ctx, 'gradient(')).toBe(2); // 只剩装填球与下一发
     expect(ctx.depth).toBe(0);
   });
 
-  it('每种配色都齐活（新增颜色时测试会挡住漏配）', () => {
-    const colors = Object.keys(MARBLE_PAINT);
+  it('每种配色的四个色位齐活，且六种颜色的形状记号互不相同', () => {
+    const colors = Object.keys(MARBLE_PAINT) as (keyof typeof MARBLE_PAINT)[];
     expect(colors.length).toBeGreaterThanOrEqual(6);
     for (const color of colors) {
-      const paint = MARBLE_PAINT[color as keyof typeof MARBLE_PAINT];
-      expect(paint.light).toMatch(/^#/);
-      expect(paint.mid).toMatch(/^#/);
-      expect(paint.dark).toMatch(/^#/);
-      expect(paint.rim).toMatch(/^#/);
+      const paint = MARBLE_PAINT[color];
+      for (const key of ['light', 'mid', 'dark', 'mark'] as const) {
+        expect(paint[key]).toMatch(/^#[0-9a-f]{6}$/i);
+      }
+      expect(MARBLE_GLYPH[color]).toBeTruthy();
     }
+    // 形状必须两两不同：色盲或屏幕反光下只剩形状可依据
+    expect(new Set(colors.map((c) => MARBLE_GLYPH[c])).size).toBe(colors.length);
   });
 });

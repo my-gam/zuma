@@ -130,6 +130,7 @@ export type { Burst, GamePhase, ZumaOptions, ZumaState } from './game';
 
 export {
   DEFAULT_STYLE,
+  MARBLE_GLYPH,
   MARBLE_PAINT,
   createView,
   drawScene,
@@ -140,6 +141,7 @@ export type {
   DrawContext,
   DrawStyle,
   GradientLike,
+  MarbleGlyph,
   MarblePaint,
   PaintLike,
   Scene,
