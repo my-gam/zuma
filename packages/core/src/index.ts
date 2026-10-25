@@ -124,3 +124,6 @@ export {
   writeJson
 } from './storage';
 export type { SerializedBest, SerializedSave, StorageLike } from './storage';
+
+export { PHYSICS, Zuma, advanceBy, flightAngle, marblePose } from './game';
+export type { Burst, GamePhase, ZumaOptions, ZumaState } from './game';
