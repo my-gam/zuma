@@ -127,3 +127,20 @@ export type { SerializedBest, SerializedSave, StorageLike } from './storage';
 
 export { PHYSICS, Zuma, advanceBy, flightAngle, marblePose } from './game';
 export type { Burst, GamePhase, ZumaOptions, ZumaState } from './game';
+
+export {
+  DEFAULT_STYLE,
+  MARBLE_PAINT,
+  createView,
+  drawScene,
+  toScreen,
+  toScreenSize
+} from './renderer';
+export type {
+  DrawContext,
+  DrawStyle,
+  GradientLike,
+  MarblePaint,
+  Scene,
+  View
+} from './renderer';
