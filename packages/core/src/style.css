@@ -1,17 +1,340 @@
-/*
- * @my-games/zuma-core —— 0.0.0 占位样式表（单数命名 ./style.css）。
+/**
+ * @my-games/zuma-core 样式表（单数命名 `./style.css`，与合集约定一致）。
  *
- * 空骨架阶段只放最小基类，保证三包各自构建能产出非空 dist/index.css
- * （verify:dist 守卫要求 vue/react 的 index.css 存在且非 0 字节）。
- * 真实舞台样式（Canvas 自适应尺寸与纵横比、HUD 分数/关卡条、触控瞄准层）随引擎补入。
+ * 样式为什么放在 core 而不是两个适配层各写一份：HUD 的排版与触控目标尺寸是玩法的一部分
+ * （按钮必须 ≥ 44px、要躲开刘海与手势条），三个宿主共用一套类名才不会走样。
+ * 适配层负责产出下面这些 DOM 结构，本文件负责把它们排好。
+ *
+ * 类名契约（`.game-zuma-*` 前缀，改名字要同步改 vue/react 两个组件）：
+ *
+ *   .game-zuma                 根容器（inline-flex 列，撑满可用宽度）
+ *     .game-zuma-hud           顶部信息条
+ *       .game-zuma-hud-item    单项（.game-zuma-hud-label + .game-zuma-hud-value）
+ *       .game-zuma-hud-combo   连锁提示位（有连锁时才带 .is-active）
+ *     .game-zuma-stage         画布容器（保持 1:1 世界比例 + 触摸不滚动）
+ *       canvas.game-zuma-canvas
+ *       .game-zuma-overlay     结算遮罩（.is-won / .is-lost / .is-paused）
+ *         .game-zuma-overlay-title
+ *         .game-zuma-overlay-score
+ *         .game-zuma-overlay-actions
+ *     .game-zuma-controls      底部按钮条
+ *       button.game-zuma-button（大按钮 .game-zuma-button-primary）
+ *     .game-zuma-queue         装填预览（.game-zuma-queue-ball）
+ *
+ * 移动端优先：`dvh` 撑高、`safe-area-inset` 避让、`touch-action: none` 防滚动劫持、
+ * 窄屏时收紧字号与间距。
  */
 
 .game-zuma {
   display: inline-flex;
   flex-direction: column;
-  gap: 8px;
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  color: #1f2d3d;
+  gap: 10px;
+  width: 100%;
+  max-width: 720px;
+  font-family: 'Segoe UI', system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  color: #e8eefc;
   user-select: none;
+  -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* ------------------------------------------------------------------ HUD */
+
+.game-zuma-hud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: #17203a;
+  box-shadow: inset 0 0 0 1px #2a3a5e;
+}
+
+.game-zuma-hud-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-zuma-hud-label {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: #8fa2c9;
+}
+
+.game-zuma-hud-value {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.game-zuma-hud-combo {
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity 120ms ease, transform 120ms ease;
+  color: #ffcf5c;
+}
+
+.game-zuma-hud-combo.is-active {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* ----------------------------------------------------------------- 画布 */
+
+.game-zuma-stage {
+  position: relative;
+  width: 100%;
+  /* 世界是 1000×1000 的正方形，靠 aspect-ratio 钉死比例，渲染层只按短边缩放 */
+  aspect-ratio: 1 / 1;
+  max-height: 72dvh;
+  margin-inline: auto;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #101521;
+  touch-action: none;
+}
+
+.game-zuma-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* 指针事件全部交给 canvas，避免触控时被浏览器当成滚动手势 */
+  touch-action: none;
+  cursor: crosshair;
+}
+
+/* ----------------------------------------------------------------- 遮罩 */
+
+.game-zuma-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px 16px;
+  text-align: center;
+  background: rgba(8, 11, 20, 0.82);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 160ms ease;
+}
+
+.game-zuma-overlay.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.game-zuma-overlay-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.game-zuma-overlay.is-won .game-zuma-overlay-title {
+  color: #7ee08f;
+}
+
+.game-zuma-overlay.is-lost .game-zuma-overlay-title {
+  color: #ff8a7a;
+}
+
+.game-zuma-overlay-score {
+  font-size: 16px;
+  color: #c3d0ea;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-zuma-overlay-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+/* ---------------------------------------------------------------- 控件 */
+
+.game-zuma-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.game-zuma-button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: #2a3a5e;
+  color: #e8eefc;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 120ms ease, transform 80ms ease;
+}
+
+.game-zuma-button:hover {
+  background: #35496f;
+}
+
+.game-zuma-button:active {
+  transform: translateY(1px);
+}
+
+.game-zuma-button:focus-visible {
+  outline: 2px solid #8fa4cc;
+  outline-offset: 2px;
+}
+
+.game-zuma-button-primary {
+  background: #1f74d0;
+}
+
+.game-zuma-button-primary:hover {
+  background: #2b87e8;
+}
+
+.game-zuma-button[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ------------------------------------------------------- 装填预览与关卡 */
+
+.game-zuma-queue {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.game-zuma-queue-ball {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  box-shadow: inset -3px -4px 6px rgba(0, 0, 0, 0.45), inset 3px 3px 6px rgba(255, 255, 255, 0.35);
+}
+
+.game-zuma-queue-ball:first-child {
+  width: 34px;
+  height: 34px;
+}
+
+.game-zuma-levels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.game-zuma-level-chip {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #1c2740;
+  color: #c3d0ea;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.game-zuma-level-chip[aria-current='true'] {
+  background: #1f74d0;
+  color: #fff;
+}
+
+.game-zuma-level-chip[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---------------------------------------------------- 小球配色的 CSS 镜像 */
+
+.game-zuma-ball-red {
+  background: #e0331f;
+}
+.game-zuma-ball-yellow {
+  background: #f0b90b;
+}
+.game-zuma-ball-green {
+  background: #1fae4b;
+}
+.game-zuma-ball-blue {
+  background: #1f74d0;
+}
+.game-zuma-ball-purple {
+  background: #8b2fd0;
+}
+.game-zuma-ball-orange {
+  background: #ef7a12;
+}
+
+/* ------------------------------------------------------------ 窄屏收紧 */
+
+@media (max-width: 420px) {
+  .game-zuma {
+    gap: 8px;
+  }
+
+  .game-zuma-hud {
+    padding: 6px 8px;
+    gap: 6px 10px;
+  }
+
+  .game-zuma-hud-value {
+    font-size: 16px;
+  }
+
+  .game-zuma-stage {
+    border-radius: 12px;
+    /* 竖屏时尽量占满宽度，同时给手势条留位 */
+    max-height: 62dvh;
+  }
+
+  .game-zuma-button {
+    flex: 1 1 auto;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .game-zuma {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: stretch;
+    max-width: 100%;
+  }
+
+  .game-zuma-stage {
+    flex: 1 1 320px;
+    max-height: 86dvh;
+  }
+
+  .game-zuma-hud,
+  .game-zuma-controls {
+    flex: 0 0 auto;
+  }
+}
+
+/* -------------------------------------------- 减少动效偏好（HUD 与遮罩） */
+
+@media (prefers-reduced-motion: reduce) {
+  .game-zuma-hud-combo,
+  .game-zuma-overlay,
+  .game-zuma-button {
+    transition: none;
+  }
+}
+
+/* --------------------------------------------- 不支持 aspect-ratio 的旧浏览器 */
+
+@supports not (aspect-ratio: 1 / 1) {
+  .game-zuma-stage {
+    height: min(720px, 92vw);
+  }
 }
