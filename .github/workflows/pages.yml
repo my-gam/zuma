@@ -59,11 +59,11 @@ jobs:
           PAGES_REPO: ${{ github.event.repository.name }}
 
       # setup-pages 会去查 Pages 是否开启；build_type 应该是 'workflow'
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
         with:
           enablement: true
 
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: pages-dist
 
@@ -75,4 +75,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
