@@ -104,6 +104,18 @@ export interface ZumaState {
   readonly trackLength: number;
   /** 过关结算分；未结算为 `null`。 */
   readonly settled: number | null;
+  /**
+   * 进入结算态（过关 / 失败）后又过了多少毫秒。
+   *
+   * `elapsedMs` 在结算时冻住（那是成绩），这个字段专给结算画面做倒计时与自动推进。
+   */
+  readonly overMs: number;
+  /**
+   * 过关后自动推进下一关的间隔（构造选项的回显）。
+   *
+   * 刻意放进快照：三个适配层的倒计时都要读它，写死数字就有三处会漂。0 表示不自动推进。
+   */
+  readonly autoNextMs: number;
 }
 
 /** 构造选项。 */
@@ -125,6 +137,12 @@ export interface ZumaOptions {
   readonly autosaveMs?: number;
   /** 爆点在屏幕上停留的毫秒数，默认 420。 */
   readonly burstMs?: number;
+  /**
+   * 过关后自动进入下一关的毫秒数，默认 2600；`0` 表示停在成功画面等宿主推进。
+   *
+   * 对齐原版节奏：通关庆祝是自动的，只有失败才停住等人。最后一关不自动（没有下一关可去）。
+   */
+  readonly autoNextMs?: number;
 }
 
 /** 固定物理步长（毫秒）= 120Hz，比最高刷新率还细，保证跨设备一致。 */
@@ -182,6 +200,7 @@ export class Zuma {
   private readonly samplesPerSegment: number | undefined;
   private readonly autosaveMs: number;
   private readonly burstMs: number;
+  private readonly autoNextMs: number;
 
   private spec: LevelSpec;
   private track: Track;
@@ -208,6 +227,7 @@ export class Zuma {
     this.samplesPerSegment = options.samplesPerSegment;
     this.autosaveMs = options.autosaveMs ?? 2000;
     this.burstMs = options.burstMs ?? 420;
+    this.autoNextMs = options.autoNextMs ?? 2600;
 
     if (this.storage) {
       this.best = loadBest(this.storage, this.bestKey) ?? emptyBest();
@@ -221,7 +241,7 @@ export class Zuma {
     this.track = buildTrack(this.spec);
     this.spacing = spacingOf(this.spec);
     this.outBounds = boundsOf(this.track, LOST_MARGIN + this.spec.radius);
-    this.state = blankState(this.spec, this.track, this.spacing);
+    this.state = blankState(this.spec, this.track, this.spacing, this.autoNextMs);
     this.beginLevelInternal(requested, options.resumeSaved ? saved : null);
   }
 
@@ -329,7 +349,10 @@ export class Zuma {
     if (!Number.isFinite(dtMs) || dtMs < 0) {
       throw new RangeError(`dtMs 必须是 ≥ 0 的有限数，收到 ${dtMs}`);
     }
-    if (this.state.phase !== 'playing' || dtMs === 0) return;
+    if (this.state.phase !== 'playing' || dtMs === 0) {
+      this.settleTick(dtMs);
+      return;
+    }
 
     this.accumulator += dtMs;
     let budget = MAX_STEPS_PER_TICK;
@@ -477,7 +500,9 @@ export class Zuma {
       bursts: [],
       radius: this.spec.radius,
       trackLength: this.track.length,
-      settled: null
+      settled: null,
+      overMs: 0,
+      autoNextMs: this.autoNextMs
     };
     this.emit();
   }
@@ -646,6 +671,24 @@ export class Zuma {
     }
   }
 
+  /**
+   * 结算态下的 `tick` 分支：不推进世界，只做两件事 ——
+   * 累计 `overMs`（成功/失败画面的倒计时就靠它，`elapsedMs` 已经冻住当成绩用了），
+   * 以及过关到点自动开下一关。
+   *
+   * 失败**不自动**推进：原版是停在失败画面等人重来，自动重开会让人以为是 bug。
+   * `ready` / `paused` 两个阶段原样不动。
+   */
+  private settleTick(dtMs: number): void {
+    const { phase, overMs, level } = this.state;
+    if (dtMs === 0 || (phase !== 'won' && phase !== 'lost')) return;
+    if (phase === 'won' && this.autoNextMs > 0 && overMs + dtMs >= this.autoNextMs && level < LEVELS.length) {
+      this.beginLevelInternal(level + 1, null);
+      return;
+    }
+    this.publish({ overMs: overMs + dtMs });
+  }
+
   private maybeAutosave(): void {
     if (!this.storage || this.autosaveMs <= 0) return;
     const now = this.clock();
@@ -668,7 +711,7 @@ export class Zuma {
 }
 
 /** 构造期与「空局」共用的零状态。 */
-function blankState(spec: LevelSpec, track: Track, spacing: number): ZumaState {
+function blankState(spec: LevelSpec, track: Track, spacing: number, autoNextMs: number): ZumaState {
   return {
     phase: 'ready',
     level: spec.id,
@@ -687,7 +730,9 @@ function blankState(spec: LevelSpec, track: Track, spacing: number): ZumaState {
     bursts: [],
     radius: spec.radius,
     trackLength: track.length,
-    settled: null
+    settled: null,
+    overMs: 0,
+    autoNextMs
   };
 }
 

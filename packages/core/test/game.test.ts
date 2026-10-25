@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   PHYSICS,
   LEVELS,
+  LEVEL_COUNT,
   Zuma,
   advanceBy,
   createMemoryStorage,
@@ -47,7 +48,13 @@ function countingStorage(): { storage: StorageLike; writes: () => number } {
 /** 用存档把一个精心挑选的链塞进游戏（存档只存颜色，位置由 headDist + spacing 重建）。 */
 function gameWithChain(
   headToTail: readonly MarbleColor[],
-  options: { level?: number; rng?: () => number; storage?: StorageLike; autosaveMs?: number } = {}
+  options: {
+    level?: number;
+    rng?: () => number;
+    storage?: StorageLike;
+    autosaveMs?: number;
+    autoNextMs?: number;
+  } = {}
 ): { game: Zuma; storage: StorageLike } {
   const storage = options.storage ?? createMemoryStorage();
   const level = options.level ?? 1;
@@ -68,6 +75,8 @@ function gameWithChain(
     storage,
     rng: options.rng ?? lcg(7),
     samplesPerSegment: 4,
+    // 这些用例只验证结算本身；自动推进另有专门用例，默认关掉免得推进到下一关把断言带偏。
+    autoNextMs: options.autoNextMs ?? 0,
     autosaveMs: options.autosaveMs ?? 0
   });
   expect(game.load()).toBe(true);
@@ -346,11 +355,86 @@ describe('失败与过关', () => {
     const s = game.getState();
     expect(s.phase).toBe('lost');
     expect(s.settled).toBe(0);
-    const frozen = game.getState();
+    const atLoss = game.getState();
     advanceBy(game, 10);
-    expect(game.getState()).toBe(frozen);
+    const later = game.getState();
+    // 世界冻住（用时与链头都不再前进），但 overMs 在走（结算画面要显示停留时长）
+    expect(later.elapsedMs).toBe(atLoss.elapsedMs);
+    expect(later.headDist).toBe(atLoss.headDist);
+    expect(later.overMs).toBeGreaterThan(atLoss.overMs);
+    expect(later.phase).toBe('lost');
   });
 
+  it('失败不会自动重来：停在失败画面等人（自动重看像 bug）', () => {
+    const { game } = gameWithChain(['red'], { autoNextMs: 2600 });
+    advanceBy(game, 30_000);
+    expect(game.getState().phase).toBe('lost');
+    expect(game.getState().level).toBe(1);
+  });
+});
+
+describe('过关结算与自动下一关', () => {
+  it('过关后 overMs 累计，到点自动进入下一关并重置局面', () => {
+    const { game } = gameWithChain(['red', 'red', 'red'], { autoNextMs: 1000 });
+    advanceBy(game, 2);
+    expect(game.getState().phase).toBe('won');
+    expect(game.getState().level).toBe(1);
+    // 还没到点：停在第 1 关的成功画面上，倒计时继续走
+    const atWin = game.getState().overMs;
+    game.tick(600);
+    expect(game.getState().level).toBe(1);
+    expect(game.getState().overMs).toBeCloseTo(atWin + 600, 6);
+    // 过点：自动开第 2 关，局面完全重置
+    game.tick(500);
+    const s = game.getState();
+    expect(s.level).toBe(2);
+    expect(s.phase).toBe('playing');
+    expect(s.overMs).toBe(0);
+    expect(s.elapsedMs).toBe(0);
+    expect(s.remaining).toBe(levelById(2).marbles);
+  });
+
+  it('autoNextMs 为 0 时停在成功画面，由宿主自己推进', () => {
+    const { game } = gameWithChain(['red', 'red', 'red'], { autoNextMs: 0 });
+    advanceBy(game, 2);
+    advanceBy(game, 600);
+    expect(game.getState().phase).toBe('won');
+    expect(game.getState().level).toBe(1);
+    game.next();
+    expect(game.getState().level).toBe(2);
+  });
+
+  it('最后一关过关不自动往后走（没有第 13 关）', () => {
+    const { game } = gameWithChain(['red', 'red', 'red'], { level: LEVEL_COUNT, autoNextMs: 500 });
+    advanceBy(game, 2);
+    expect(game.getState().phase).toBe('won');
+    game.tick(4000);
+    expect(game.getState().level).toBe(LEVEL_COUNT);
+    expect(game.getState().phase).toBe('won');
+  });
+
+  it('结算画面 pause() 是 no-op：不会退回 playing，倒计时照旧走', () => {
+    // 原版也没有「暂停庆祝画面」这个操作。刻意不做：phase 已经离开 playing，
+    // 再塞一个 paused 会把 won/lost 顶掉，玩家反而看不见自己怎么结束的。
+    const { game } = gameWithChain(['red', 'red', 'red'], { autoNextMs: 1000 });
+    advanceBy(game, 2);
+    game.pause();
+    expect(game.getState().phase).toBe('won');
+    const before = game.getState().overMs;
+    game.tick(400);
+    expect(game.getState().overMs).toBeCloseTo(before + 400, 6);
+    expect(game.getState().phase).toBe('won');
+  });
+
+  it('快照回显 autoNextMs，适配层不必各自硬编码倒计时数字', () => {
+    const fresh = new Zuma({ rng: lcg(4), samplesPerSegment: 4 });
+    expect(fresh.getState().autoNextMs).toBe(2600);
+    const manual = new Zuma({ rng: lcg(4), samplesPerSegment: 4, autoNextMs: 0 });
+    expect(manual.getState().autoNextMs).toBe(0);
+  });
+});
+
+describe('结算后的分数记录与关卡推进', () => {
   it('过关写入荣誉榜并清掉局中快照', () => {
     const storage = createMemoryStorage();
     const { game } = gameWithChain(['red', 'red', 'red'], { storage, level: 1 });
@@ -372,7 +456,7 @@ describe('失败与过关', () => {
   });
 
   it('最后一关 next 停在原地重开', () => {
-    const last = levelById(12);
+    const last = levelById(LEVEL_COUNT);
     const game = new Zuma({ level: last.id, rng: lcg(31), samplesPerSegment: 4 });
     game.next();
     expect(game.getState().level).toBe(last.id);
