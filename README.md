@@ -43,12 +43,24 @@ version: 0.0.0-stage`。想让占位版不占用 `latest`，靠的是 **dist-tag
 ```bash
 pnpm build && pnpm verify:dist
 npm login            # 或 NPM_TOKEN；仅首版需要
-# 逐包（npm workspaces 语法）：
-npm publish --access public --tag stage -w @my-games/zuma-core
-npm publish --access public --tag stage -w @my-games/zuma-vue
-npm publish --access public --tag stage -w @my-games/zuma-react
-# 或一把梭（pnpm）：
-# pnpm -r --filter "./packages/**" publish --access public --tag stage --no-git-checks
+# 一把梭（pnpm workspace，三包同一 dist-tag）：
+pnpm -r --filter "./packages/**" publish --access public --tag stage --no-git-checks
+# 或逐包：
+pnpm --filter @my-games/zuma-core  publish --access public --tag stage --no-git-checks
+pnpm --filter @my-games/zuma-vue   publish --access public --tag stage --no-git-checks
+pnpm --filter @my-games/zuma-react publish --access public --tag stage --no-git-checks
+```
+
+> ⚠ **别用 `npm publish -w <包名>`**。本仓是 pnpm workspace，根 `package.json` 里没有
+> `workspaces` 字段，npm 看不见这些包：`npm query '.workspace'` 返回 `[]`，
+> `npm publish -w @my-games/zuma-core` 直接 `No workspaces found`。
+> （上面的 filter 在命令行里用普通双引号即可；`\"…\"` 那种转义只针对 `package.json` 脚本字符串。）
+
+发完务必核对占位版没占用 `latest`：
+
+```bash
+npm view @my-games/zuma-core@0.0.0 version   # 要带版本号，否则可能命中本机缓存
+npm dist-tag ls @my-games/zuma-core          # 期望 stage → 0.0.0，且 latest 不存在
 ```
 
 发完在 npmjs 上为 `@my-games` org 的三个包分别登记 Trusted Publisher：指向
