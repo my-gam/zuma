@@ -2,15 +2,25 @@ import { describe, expect, it } from 'vitest';
 import * as barrel from '../src/index';
 import {
   MARBLE_COLORS,
+  LEVELS,
+  LEVEL_COUNT,
   advanceChain,
   closeGaps,
+  collapseChain,
   createChain,
+  decideAdvance,
+  findRuns,
+  fire,
+  generateMarbleColors,
   hasGaps,
   insertMarble,
   isMarbleColor,
+  levelById,
   paletteFor,
   poseAt,
-  sampleTrack
+  sampleTrack,
+  scoreMatch,
+  sweepProjectile
 } from '../src/index';
 import type { Vec2 } from '../src/index';
 
@@ -20,7 +30,7 @@ import type { Vec2 } from '../src/index';
  * 它同时是「`pnpm test` 不是空跑」的证据来源之一。
  */
 describe('core barrel（index.ts 公共导出面）', () => {
-  it('导出曲线、弧长查询与彩球链的关键 API', () => {
+  it('导出曲线、链、消合、计分、弹道与关卡的关键 API', () => {
     expect(typeof sampleTrack).toBe('function');
     expect(typeof poseAt).toBe('function');
     expect(typeof createChain).toBe('function');
@@ -30,7 +40,17 @@ describe('core barrel（index.ts 公共导出面）', () => {
     expect(typeof hasGaps).toBe('function');
     expect(typeof paletteFor).toBe('function');
     expect(typeof isMarbleColor).toBe('function');
+    expect(typeof findRuns).toBe('function');
+    expect(typeof collapseChain).toBe('function');
+    expect(typeof scoreMatch).toBe('function');
+    expect(typeof sweepProjectile).toBe('function');
+    expect(typeof fire).toBe('function');
+    expect(typeof LEVELS).not.toBe('undefined');
+    expect(typeof levelById).toBe('function');
+    expect(typeof generateMarbleColors).toBe('function');
+    expect(typeof decideAdvance).toBe('function');
     expect(MARBLE_COLORS.length).toBeGreaterThanOrEqual(3);
+    expect(LEVEL_COUNT).toBe(LEVELS.length);
   });
 
   it('占位常量已退役，不再出现在公共面里', () => {

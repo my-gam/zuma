@@ -79,3 +79,30 @@ export type {
   ProjectileHit,
   SweepResult
 } from './projectile';
+
+export {
+  INITIAL_REWIND_STATE,
+  LEVELS,
+  LEVEL_COUNT,
+  WORLD_SIZE,
+  archimedeanSpiral,
+  buildTrack,
+  decideAdvance,
+  generateMarbleColors,
+  levelBounds,
+  levelById,
+  rewindSchedule,
+  serpentine,
+  spacingOf,
+  speedAt
+} from './levels';
+export type {
+  AdvanceDecision,
+  LevelSpec,
+  RandomSource,
+  RewindState,
+  RewindStep,
+  RewindTrigger,
+  SerpentineOptions,
+  SpiralOptions
+} from './levels';
