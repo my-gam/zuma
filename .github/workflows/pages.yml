@@ -59,7 +59,7 @@ jobs:
           PAGES_REPO: ${{ github.event.repository.name }}
 
       # setup-pages 会去查 Pages 是否开启；build_type 应该是 'workflow'
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
         with:
           enablement: true
 
