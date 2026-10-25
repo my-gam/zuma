@@ -1,14 +1,25 @@
 /**
- * @my-games/zuma-core —— `0.0.0` 占位实现。
+ * @my-games/zuma-core —— 引擎 barrel。
  *
- * 这是一个「空包」骨架：目的仅是把 monorepo 的
- * `build → verify:dist → typecheck → test` 门禁与 npm Trusted Publisher 链路跑通，
- * 好让首版（可信发布者无法发某包的第一个版本）能先手工种进 registry。
+ * 骨架阶段（`0.0.0`）只为把 monorepo 的 `build → verify:dist → typecheck → test`
+ * 门禁与 npm Trusted Publisher 链路跑通，故留着 `ZUMA_PACKAGE` / `ZUMA_STAGE` 两个占位
+ * 常量；引擎本体按功能块逐笔补入，正式版发布前（bump 到 `0.0.1` 时）再移除占位常量。
  *
- * 真实祖玛引擎 —— 轨道曲线（弧长参数化样条）、彩球链推进与同色消合、发射器瞄准/弹道/
- * 插入判定、关卡生成、连锁计分 —— 以及一个只依赖 `CanvasRenderingContext2D` 的无框架
- * 渲染器，已在占位包发布前按同一三层结构写好并暂存，待 `0.0.0` 上线后作为后续提交补回。
+ * 已落地：轨道曲线（向心 Catmull-Rom 采样 + 弧长参数化查询）。
+ * 待补：彩球链与同色消合、发射器弹道与插入判定、关卡与计分、状态机、存档、
+ * 以及只依赖 `CanvasRenderingContext2D` 的无框架渲染器。
+ *
+ * 分层纪律：core 不依赖 Vue / React，不查 DOM、不发网络请求、不自建定时器；
+ * `renderer` 只接受一个已经拿到的 2D context。
  */
+
+export {
+  DEFAULT_SAMPLES_PER_SEGMENT,
+  clampTrackDist,
+  poseAt,
+  sampleTrack
+} from './track';
+export type { Track, TrackOptions, TrackPose, Vec2 } from './track';
 
 /** 包标识占位。 */
 export const ZUMA_PACKAGE = 'zuma-core' as const;
