@@ -1,16 +1,21 @@
-# zuma（0.0.0 空骨架）
+# zuma（引擎逐块落地中）
 
-> 这是一个 **占位发布**：monorepo 三层结构 + CI/发布链路已就位，但游戏逻辑尚未落地。
-> 目的是先把 `@my-games/zuma-core` / `-vue` / `-react` 三个包以 `0.0.0`
-> 手工种进 npm，用来配置 GitHub 的 npm **Trusted Publisher**（可信发布者无法发布
-> 某个包的第一个版本，所以首版必须手工 seed）。真实祖玛引擎会在此之后作为后续提交补入。
+> 三层结构 + CI/发布链路已就位，`core` 引擎**正在按功能块逐笔落地**。
+> `0.0.0` 是为配置 npm **Trusted Publisher** 而手工种下的占位空包（可信发布者无法发布
+> 某个包的第一个版本）；`0.0.1` 起是真实代码。当前**还没有可玩性**：状态机、弹道命中、
+> 渲染器与适配层尚未接入，`-vue` / `-react` 的 `GameZuma` 仍是占位组件。
 
 ## 这个仓库现在有什么
 
 - **pnpm workspace**：`packages/core` + `packages/vue` + `packages/react`，外加 `playground/`。
-- **`@my-games/zuma-core`**：框架无关引擎占位，`vite build --mode lib` 一次出
-  ESM / CJS / UMD / IIFE 四格式 + `.d.ts`。当前只导出 `ZUMA_PACKAGE` / `ZUMA_STAGE` 两个占位常量。
-- **`@my-games/zuma-vue` / `-react`**：组件适配器占位，各出一个 `GameZuma` 组件（仅渲染占位文案）
+- **`@my-games/zuma-core`**：框架无关引擎，`vite build --mode lib` 一次出
+  ESM / CJS / UMD / IIFE 四格式 + `.d.ts`。已导出：轨道曲线（向心 Catmull-Rom 采样 +
+  弧长参数化查询 `sampleTrack` / `poseAt`）、彩球链（不可变 `createChain` / `advanceChain` /
+  `insertMarble` / `closeGaps`）、调色板（`MARBLE_COLORS` / `paletteFor` / `isMarbleColor`）。
+  均为纯函数、零依赖、零 DOM。
+- **待补**：同色消合与连锁、弹道与命中、关卡与计分、`Zuma` 状态机、存档、
+  只依赖 `CanvasRenderingContext2D` 的无框架渲染器，以及两个适配层与 playground 演示。
+- **`@my-games/zuma-vue` / `-react`**：组件适配器，各出一个 `GameZuma`（当前仅渲染占位文案）
   并抽出 `dist/index.css`。
 - **CI**：`.github/workflows/publish.yml`（推 `v*` tag → 门禁 → OIDC 发布；`workflow_dispatch`
   默认 `dry_run=true` 可安全彩排）与 `pages.yml`（main 推 → 构建 playground → GitHub Pages）。

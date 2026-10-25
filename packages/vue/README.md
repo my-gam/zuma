@@ -1,6 +1,6 @@
 # @my-games/zuma-vue
 
-> 祖玛的 Vue 3 组件适配器。**当前为 `0.0.0` 占位版本**，`GameZuma` 仅渲染占位文案。
+> 祖玛的 Vue 3 组件适配器。**当前是占位组件**（Canvas 舞台 + 触控瞄准随引擎后续功能块补入）。
 
 ```bash
 pnpm add @my-games/zuma-vue vue
