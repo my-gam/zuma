@@ -94,6 +94,16 @@ export interface GradientLike {
   addColorStop(offset: number, color: string): void;
 }
 
+/**
+ * 能被赋给 `fillStyle` / `strokeStyle` 的东西。
+ *
+ * 除了字符串与渐变，真实 canvas 还接受 `CanvasPattern`。这里必须给它留位置：否则
+ * `CanvasRenderingContext2D` 反而**不能赋值**给本模块的 `DrawContext`（属性类型要求双向兼容），
+ * 适配层就得被迫写 `as unknown as DrawContext` 这种脏转换。用可选的 `setTransform` 做结构占位，
+ * 正好只放过 pattern 而不放过任意对象。
+ */
+export type PaintLike = string | GradientLike | { readonly setTransform?: unknown };
+
 /** 带 `ctx` 最小能力面的接口（假实现只需覆盖这些方法就能被单测驱动）。 */
 export interface DrawContext {
   save(): void;
@@ -114,8 +124,8 @@ export interface DrawContext {
     y1: number,
     r1: number
   ): GradientLike;
-  set fillStyle(v: string | GradientLike);
-  set strokeStyle(v: string | GradientLike);
+  set fillStyle(v: PaintLike);
+  set strokeStyle(v: PaintLike);
   set lineWidth(v: number);
   set globalAlpha(v: number);
   set lineCap(v: string);

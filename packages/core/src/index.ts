@@ -141,6 +141,7 @@ export type {
   DrawStyle,
   GradientLike,
   MarblePaint,
+  PaintLike,
   Scene,
   View
 } from './renderer';
