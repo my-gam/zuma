@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   PHYSICS,
+  LEVELS,
   Zuma,
   advanceBy,
   createMemoryStorage,
@@ -375,6 +376,64 @@ describe('失败与过关', () => {
     const game = new Zuma({ level: last.id, rng: lcg(31), samplesPerSegment: 4 });
     game.next();
     expect(game.getState().level).toBe(last.id);
+  });
+});
+
+describe('待发包取色规则（防死局）', () => {
+  it('队列颜色恒出自「链上还存在」的颜色 —— 不会发给你打不动的色', () => {
+    // 链上只有红与黄（成对，没有现成的三连），rng 取到调色板上界：
+    // 修复前这里会连发三颗绿，绿色永远凑不出三连，玩家只能干等到判负。
+    const { game } = gameWithChain(['red', 'red', 'yellow', 'yellow'], { rng: () => 0.9999 });
+    const state = game.getState();
+    const onChain = new Set(state.chain.marbles.map((m) => m.color));
+    expect(onChain).toEqual(new Set(['red', 'yellow']));
+    for (const color of state.queue) {
+      expect(onChain.has(color)).toBe(true);
+    }
+  });
+
+  it('打几发之后依旧如此：队列补色也只认场上活色', () => {
+    const { game } = gameWithChain(['red', 'red', 'yellow', 'yellow'], { rng: () => 0.5 });
+    for (let i = 0; i < 400; i += 1) {
+      game.tick(PHYSICS.STEP_MS);
+      if (!game.getState().projectile) game.shoot();
+    }
+    const state = game.getState();
+    const onChain = new Set(state.chain.marbles.map((m) => m.color));
+    for (const color of state.queue) {
+      expect(onChain.has(color) || onChain.size === 0).toBe(true);
+    }
+  });
+
+  it('终局只剩两颗同色时，能真的打完而不是一路拖到判负', () => {
+    const { game } = gameWithChain(['red', 'red']);
+    const origin = game.getLauncher();
+    let frames = 0;
+    while (game.getState().phase === 'playing' && frames < 4000) {
+      const state = game.getState();
+      if (!state.projectile && state.chain.marbles.length > 0) {
+        const head = state.chain.marbles[0]!;
+        const pose = marblePose(game.getTrack(), head);
+        game.aim(Math.atan2(pose.y - origin.y, pose.x - origin.x));
+        game.shoot();
+      }
+      game.tick(PHYSICS.STEP_MS);
+      frames += 1;
+    }
+    expect(game.getState().phase).toBe('won');
+    expect(game.getState().remaining).toBe(0);
+  });
+
+  it('12 关开局队列都 ⊆ 链上颜色集合', () => {
+    for (const spec of LEVELS) {
+      const game = new Zuma({ level: spec.id, rng: lcg(spec.id), samplesPerSegment: 4 });
+      const state = game.getState();
+      const onChain = new Set(state.chain.marbles.map((m) => m.color));
+      expect(state.queue.length).toBe(spec.nextQueue);
+      for (const color of state.queue) {
+        expect(onChain.has(color), `level ${spec.id} 队列混进场上没有的 ${color}`).toBe(true);
+      }
+    }
   });
 });
 

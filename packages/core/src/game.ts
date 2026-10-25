@@ -314,7 +314,7 @@ export class Zuma {
     });
     this.publish({
       projectile,
-      queue: this.refillQueue(this.state.queue.slice(1)),
+      queue: this.refillQueue(this.state.chain, this.state.queue.slice(1)),
       shotsFired: this.state.shotsFired + 1
     });
     return true;
@@ -464,7 +464,7 @@ export class Zuma {
       level: this.spec.id,
       chain,
       projectile: null,
-      queue: this.freshQueue(),
+      queue: this.freshQueue(chain),
       aimAngle: -Math.PI / 2,
       score: useSave?.score ?? 0,
       combo: 0,
@@ -482,26 +482,47 @@ export class Zuma {
     this.emit();
   }
 
+  /**
+   * 待发包的合法颜色：链上仍存在的颜色 ∪ 队列里已备好的颜色。
+   *
+   * 这是**防死局的关键**（2026-10-25 用户真机反馈「最后没有一样颜色时卡住」）：原来待发包
+   * 从关卡调色板等概率抽，于是会出现「链上只剩红和黄，抽到的却是绿」——绿色永远凑不出三连，
+   * 玩家只能一发发往洞里填，体验上就是卡死。原版祖玛的规矩是**待发包只从场上还活着的颜色里取**，
+   * 所以只要链上还有球，就一定打得出消合。
+   *
+   * `dist < 0` 的球也算活着（倒退段会把它吸回场上），不能排除。顺序按调色板下标定死，
+   * 与 Set 插入顺序无关，保证同种子可复现。
+   */
+  private candidateColors(chain: Chain, queue: readonly MarbleColor[]): MarbleColor[] {
+    const palette = [...paletteFor(this.spec.colors)];
+    const alive = new Set<MarbleColor>(queue);
+    for (const marble of chain.marbles) {
+      alive.add(marble.color);
+    }
+    const options = palette.filter((color) => alive.has(color));
+    return options.length > 0 ? options : palette; // 链与队列都空（结算态）时退回全调色板
+  }
+
   /** 造一条新的装填队列。 */
-  private freshQueue(): MarbleColor[] {
+  private freshQueue(chain: Chain): MarbleColor[] {
+    const candidates = this.candidateColors(chain, []);
     const out: MarbleColor[] = [];
     for (let i = 0; i < this.spec.nextQueue; i += 1) {
-      out.push(this.pickColor());
+      out.push(this.pickFrom(candidates));
     }
     return out;
   }
 
-  /** 从当前关卡调色板等概率取一色。 */
-  private pickColor(): MarbleColor {
-    const palette = paletteFor(this.spec.colors);
-    const index = Math.min(palette.length - 1, Math.floor(this.rng() * palette.length));
-    return palette[index]!;
+  /** 按候选集合等概率取一色。 */
+  private pickFrom(candidates: readonly MarbleColor[]): MarbleColor {
+    const index = Math.min(candidates.length - 1, Math.floor(this.rng() * candidates.length));
+    return candidates[index]!;
   }
 
-  private refillQueue(queue: readonly MarbleColor[]): MarbleColor[] {
+  private refillQueue(chain: Chain, queue: readonly MarbleColor[]): MarbleColor[] {
     const out = [...queue];
     while (out.length < this.spec.nextQueue) {
-      out.push(this.pickColor());
+      out.push(this.pickFrom(this.candidateColors(chain, out)));
     }
     return out;
   }
