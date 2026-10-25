@@ -242,6 +242,82 @@ export function poseAt(track: Track, dist: number): TrackPose {
   };
 }
 
+/** 轴对齐包围盒。 */
+export interface Bounds {
+  readonly minX: number;
+  readonly minY: number;
+  readonly maxX: number;
+  readonly maxY: number;
+}
+
+/**
+ * 轨道（含控制点）的包围盒，向外扩 `padding`。
+ *
+ * 两处要用它：渲染层据此把世界坐标等比映射进画布（含样条在直角处的外扩余量），
+ * 玩法层据此判定弹球飞出世界即销毁。
+ */
+export function boundsOf(track: Track, padding = 0): Bounds {
+  if (!Number.isFinite(padding) || padding < 0) {
+    throw new RangeError(`padding 必须是 ≥ 0 的有限数，收到 ${padding}`);
+  }
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  const visit = (p: Vec2): void => {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  };
+  for (const p of track.points) visit(p);
+  for (const p of track.controlPoints) visit(p);
+  return {
+    minX: minX - padding,
+    minY: minY - padding,
+    maxX: maxX + padding,
+    maxY: maxY + padding
+  };
+}
+
+/** 点是否落在包围盒外（含边界上算在内）。 */
+export function isOutsideBounds(point: Vec2, bounds: Bounds): boolean {
+  return (
+    point.x < bounds.minX || point.x > bounds.maxX || point.y < bounds.minY || point.y > bounds.maxY
+  );
+}
+
+/**
+ * 把任意点投影到轨道上，返回最近的弧长位置。
+ *
+ * 逐段算「点到线段」的垂足距离取最小，O(采样数)。命中层用它把「弹球碰到球的位置」
+ * 换成链能用的 `dist`。轨道采样密（每段默认 24 步），投影误差在半个采样间距内。
+ */
+export function projectDist(track: Track, point: Vec2): number {
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+    throw new RangeError(`投影点坐标必须是有限数，收到 (${point.x}, ${point.y})`);
+  }
+  let bestDist = 0;
+  let bestSqr = Number.POSITIVE_INFINITY;
+  const pts = track.points;
+  for (let i = 0; i < pts.length - 1; i += 1) {
+    const a = pts[i]!;
+    const b = pts[i + 1]!;
+    const abx = b.x - a.x;
+    const aby = b.y - a.y;
+    const len2 = abx * abx + aby * aby;
+    const t = len2 > 0 ? Math.min(1, Math.max(0, ((point.x - a.x) * abx + (point.y - a.y) * aby) / len2)) : 0;
+    const cx = a.x + abx * t;
+    const cy = a.y + aby * t;
+    const sqr = (point.x - cx) * (point.x - cx) + (point.y - cy) * (point.y - cy);
+    if (sqr < bestSqr) {
+      bestSqr = sqr;
+      bestDist = track.cum[i]! + Math.sqrt(len2) * t;
+    }
+  }
+  return bestDist;
+}
+
 /** 把 `dist` 夹到 `[0, length]`，供链推进与命中判定复用同一套边界语义。 */
 export function clampTrackDist(track: Track, dist: number): number {
   return Math.min(Math.max(dist, 0), track.length);

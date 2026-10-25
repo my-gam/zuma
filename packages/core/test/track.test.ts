@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SAMPLES_PER_SEGMENT,
+  boundsOf,
   clampTrackDist,
+  isOutsideBounds,
   poseAt,
+  projectDist,
   sampleTrack,
   type Vec2
 } from '../src/track';
@@ -234,5 +237,72 @@ describe('clampTrackDist', () => {
     expect(clampTrackDist(track, -1)).toBe(0);
     expect(clampTrackDist(track, 42)).toBe(42);
     expect(clampTrackDist(track, 1e9)).toBe(track.length);
+  });
+});
+
+describe('projectDist 投影回弧长', () => {
+  it('直线轨道上 dist 就是 x（含垂直偏移）', () => {
+    const track = sampleTrack(STRAIGHT);
+    expect(projectDist(track, { x: 50, y: 0 })).toBeCloseTo(50, 6);
+    expect(projectDist(track, { x: 50, y: 100 })).toBeCloseTo(50, 6);
+  });
+
+  it('超出轨道两端时夹到 0 与全长', () => {
+    const track = sampleTrack(STRAIGHT);
+    expect(projectDist(track, { x: -50, y: 0 })).toBeCloseTo(0, 9);
+    expect(projectDist(track, { x: 150, y: 0 })).toBeCloseTo(track.length, 9);
+  });
+
+  it('与 poseAt 互为逆运算：曲线上的点投影回来得到原弧长', () => {
+    const track = sampleTrack(spiralControl());
+    for (const d of [0, 37.5, 500, track.length]) {
+      const pose = poseAt(track, d);
+      expect(projectDist(track, { x: pose.x, y: pose.y })).toBeCloseTo(d, 4);
+    }
+  });
+
+  it('非有限坐标抛错', () => {
+    const track = sampleTrack(STRAIGHT);
+    expect(() => projectDist(track, { x: Number.NaN, y: 0 })).toThrow(RangeError);
+    expect(() => projectDist(track, { x: 0, y: Number.POSITIVE_INFINITY })).toThrow(RangeError);
+  });
+});
+
+describe('boundsOf 包围盒', () => {
+  it('直线轨道退化成一条线段，padding 向外扩', () => {
+    const track = sampleTrack(STRAIGHT);
+    expect(boundsOf(track)).toEqual({ minX: 0, minY: 0, maxX: 100, maxY: 0 });
+    expect(boundsOf(track, 10)).toEqual({ minX: -10, minY: -10, maxX: 110, maxY: 10 });
+  });
+
+  it('直角轨道的包围盒会因样条外扩而越过控制点折线（渲染留边距的依据）', () => {
+    // 实测：三段 100 单位直角折线，样条鼓到 y = -7.41 ~ 107.41（超出折线包围盒约 7.4%），
+    // 而 x 严格落在 [0, 200] 内——外扩只发生在「拐弯的法向」上。
+    const track = sampleTrack([
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 200, y: 100 }
+    ]);
+    const bounds = boundsOf(track);
+    expect(bounds.minY).toBeLessThan(0);
+    expect(bounds.maxY).toBeGreaterThan(100);
+    expect(bounds.minX).toBe(0);
+    expect(bounds.maxX).toBe(200);
+    // 外扩量受控：不到单段长度的 10%，关卡留边距按这个数量级即可。
+    expect(Math.abs(bounds.minY)).toBeLessThan(10);
+  });
+
+  it('非法 padding 抛错', () => {
+    const track = sampleTrack(STRAIGHT);
+    expect(() => boundsOf(track, -1)).toThrow(RangeError);
+    expect(() => boundsOf(track, Number.NaN)).toThrow(RangeError);
+  });
+
+  it('isOutsideBounds 判定内外', () => {
+    const bounds = boundsOf(sampleTrack(STRAIGHT), 5);
+    expect(isOutsideBounds({ x: 50, y: 0 }, bounds)).toBe(false);
+    expect(isOutsideBounds({ x: 50, y: -6 }, bounds)).toBe(true);
+    expect(isOutsideBounds({ x: 106, y: 0 }, bounds)).toBe(true);
   });
 });

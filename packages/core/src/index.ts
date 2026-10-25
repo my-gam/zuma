@@ -55,8 +55,27 @@ export {
 
 export {
   DEFAULT_SAMPLES_PER_SEGMENT,
+  boundsOf,
   clampTrackDist,
+  isOutsideBounds,
   poseAt,
+  projectDist,
   sampleTrack
 } from './track';
-export type { Track, TrackOptions, TrackPose, Vec2 } from './track';
+export type { Bounds, Track, TrackOptions, TrackPose, Vec2 } from './track';
+
+export {
+  fire,
+  isProjectileLost,
+  projectileAngle,
+  projectileSpeed,
+  rayCircleT,
+  stepProjectile,
+  sweepProjectile
+} from './projectile';
+export type {
+  FireOptions,
+  Projectile,
+  ProjectileHit,
+  SweepResult
+} from './projectile';
