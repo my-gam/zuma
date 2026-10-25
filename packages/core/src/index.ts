@@ -106,3 +106,21 @@ export type {
   SerpentineOptions,
   SpiralOptions
 } from './levels';
+
+export {
+  DEFAULT_BEST_KEY,
+  DEFAULT_SAVE_KEY,
+  SAVE_VERSION,
+  clearKey,
+  createMemoryStorage,
+  emptyBest,
+  emptySave,
+  isSerializedBest,
+  isSerializedSave,
+  loadBest,
+  loadSave,
+  migrate,
+  recordBest,
+  writeJson
+} from './storage';
+export type { SerializedBest, SerializedSave, StorageLike } from './storage';
