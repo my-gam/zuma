@@ -95,7 +95,10 @@ export interface ZumaState {
   readonly elapsedMs: number;
   /** 链上剩余球数。 */
   readonly remaining: number;
-  /** 链头弧长。 */
+  /**
+   * 链头弧长 —— **由链反查得到的派生值**，不是独立累加的账（见 `step()` 里的说明：
+   * 独立累加会在带头球被消掉时漂移，实测偏出 527 世界单位导致提前判负）。
+   */
   readonly headDist: number;
   /** 链的运动方向（倒退段为 -1）。 */
   readonly direction: 1 | -1;
@@ -159,6 +162,11 @@ const LOST_MARGIN = 40;
 
 function defaultRandom(): number {
   return Math.random();
+}
+
+/** 链头（最接近洞口的球）的真实弧长；空链为 0。判负与倒退触发都以它为准。 */
+function headDistOf(chain: Chain): number {
+  return chain.marbles[0]?.dist ?? 0;
 }
 
 /** 链上是否还有空隙（有空隙说明连锁还在进行中，不能清零 combo）。 */
@@ -495,7 +503,7 @@ export class Zuma {
       hits: useSave?.hits ?? 0,
       elapsedMs: useSave?.elapsedMs ?? 0,
       remaining: chain.marbles.length,
-      headDist: chain.marbles.length ? headDist : 0,
+      headDist: headDistOf(chain),
       direction: 1,
       bursts: [],
       radius: this.spec.radius,
@@ -563,11 +571,10 @@ export class Zuma {
     //    倒退不做「尾球不得越过生成口」的钳制：原版祖玛里彩球是从入口进出的一条长龙，
     //    倒退段就是把后段吸回入口外（`dist < 0`），渲染层按「不上屏」处理即可。
     //    一旦在这里钳死，倒退段就永远走不完，整关卡在 -1 方向上出不来。
-    const decision = decideAdvance(this.steps, base.headDist, this.rewind);
+    const decision = decideAdvance(this.steps, headDistOf(base.chain), this.rewind);
     this.rewind = decision.state;
     const delta = speed * seconds * decision.direction;
     let chain = advanceChain(base.chain, delta);
-    let headDist = base.headDist + delta;
 
     // 2. 后段以链速追近，收拢消合留下的空隙
     chain = closeGaps(chain, deltaScale);
@@ -621,7 +628,14 @@ export class Zuma {
       if (alive.length !== bursts.length) bursts = alive;
     }
 
-    // 6. 胜负判定
+    // 6. **链头位置一律从链反查**，绝不用累加出来的数。
+    //    之前 `headDist` 是 `base.headDist + delta` 一步步加出来的，可带头的球一旦被消掉，
+    //    新链头是后面那颗（`dist` 更小），账上却还停在被打掉的位置继续前进 ——
+    //    实测打 21 发后漂移 527 世界单位：球还在螺旋中段（离洞 376.7 / 世界 1000）就判了进洞。
+    //    链是唯一事实源，插球、消合、倒退都改它，所以只信它。
+    const headDist = headDistOf(chain);
+
+    // 7. 胜负判定
     let phase: GamePhase = 'playing';
     let settled: number | null = null;
     if (chain.marbles.length === 0) {

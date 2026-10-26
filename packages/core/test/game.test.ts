@@ -9,6 +9,7 @@ import {
   flightAngle,
   levelById,
   marblePose,
+  poseAt,
   writeJson,
   type Burst,
   type MarbleColor,
@@ -370,6 +371,55 @@ describe('失败与过关', () => {
     advanceBy(game, 30_000);
     expect(game.getState().phase).toBe('lost');
     expect(game.getState().level).toBe(1);
+  });
+});
+
+describe('链头位置是派生值（判负点不能漂移）', () => {
+  it('任意时刻 state.headDist 都等于链头球的真实 dist', () => {
+    const { game } = gameWithChain(['red', 'red', 'yellow', 'yellow', 'green', 'green', 'green']);
+    const origin = game.getLauncher();
+    for (let i = 0; i < 3000; i += 1) {
+      const s = game.getState();
+      if (s.phase !== 'playing') break;
+      if (!s.projectile && s.chain.marbles.length > 0) {
+        const head = marblePose(game.getTrack(), s.chain.marbles[0]!);
+        game.aim(Math.atan2(head.y - origin.y, head.x - origin.x));
+        game.shoot();
+      }
+      game.tick(PHYSICS.STEP_MS);
+      const after = game.getState();
+      const real = after.chain.marbles[0]?.dist ?? 0;
+      expect(after.headDist).toBeCloseTo(real, 9);
+    }
+  });
+
+  it('消掉带头的一串之后，判负点跟着真实链头退回去（不会提前进洞）', () => {
+    // 带头三颗同色：第一步就被消掉，链头落到后面 dist 更小的球上。
+    const { game } = gameWithChain(['blue', 'blue', 'blue', 'green', 'green']);
+    advanceBy(game, 2);
+    const s = game.getState();
+    expect(s.chain.marbles.map((m) => m.color)).toEqual(['green', 'green']);
+    expect(s.headDist).toBeCloseTo(s.chain.marbles[0]!.dist, 9);
+    expect(s.phase).toBe('playing');
+    // 被打掉的那三颗原本在最前面：新链头必须比它们更靠生成口
+    expect(s.headDist).toBeLessThan(4 * s.chain.spacing);
+  });
+
+  it('判负那一刻，链头必须真的到了洞口（不是半路上）', () => {
+    const { game } = gameWithChain(['red', 'green', 'blue']);
+    const track = game.getTrack();
+    const hole = poseAt(track, track.length);
+    let guard = 0;
+    while (game.getState().phase === 'playing' && guard < 60_000) {
+      game.tick(PHYSICS.STEP_MS);
+      guard += 1;
+    }
+    const s = game.getState();
+    expect(s.phase).toBe('lost');
+    const head = s.chain.marbles[0]!;
+    expect(head.dist).toBeGreaterThanOrEqual(track.length - 1e-6);
+    const at = poseAt(track, head.dist);
+    expect(Math.hypot(at.x - hole.x, at.y - hole.y)).toBeLessThan(1e-6);
   });
 });
 
