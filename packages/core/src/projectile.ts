@@ -7,13 +7,16 @@
  * 所以这里用**扫掠**：把这一帧走过的线段当成一条射线，解圆-线第一次相交，
  * 取所有候选球里最早的那一个。
  *
- * 命中点只是几何交点，链的插入位置要沿轨表达，因此再用 `projectDist` 把接触点投影回轨道，
- * 交给 `insertMarble` 处理（它还会钳制「新球不得嵌进已有球」）。
+ * 命中之后，插入位置**锚定在被打中的那颗球上**（`struck.dist` 靠生成口一侧半格），
+ * 不拿接触点去做自由投影。理由实测过：螺旋轨道是自接近曲线，接触点的「最近弧长」会落到
+ * **另一圈**上 —— 第 9 关开局朝 0° 打，命中 dist=1692 的橙球，自由投影却给出 1872.5
+ * （离接触点只差 2.0，但离被打球心 34.0），球直接插到链头，差 5 个球位；第 12 关一例差 15 颗。
+ * 玩家看到的就是「我打的是这颗，球插到别处去了」。
  *
  * 本模块纯函数、无 DOM、无框架；`poseAt` 只吃已建好的 `Track`。
  */
 import type { Chain, MarbleId } from './chain';
-import { poseAt, projectDist, type Track, type Vec2 } from './track';
+import { poseAt, type Track, type Vec2 } from './track';
 import type { MarbleColor } from './types';
 
 /** 飞行中的弹球。`vel` 单位是「世界单位 / 秒」。 */
@@ -42,7 +45,11 @@ export interface ProjectileHit {
   readonly marbleIndex: number;
   /** 接触点（弹球停下的位置）。 */
   readonly contact: Vec2;
-  /** 接触点投影到轨道上的弧长，即插入位置。 */
+  /**
+   * 插入位置的弧长 —— **锚定在被打中的那颗球上**：`marbles[marbleIndex].dist` 靠生成口
+   * 一侧半个 `spacing`。交给 `insertMarble` 后，新球必然紧贴着被打中那颗。
+   * 这里刻意不做接触点的自由投影（自接近的螺旋曲线会把投影甩到另一圈去）。
+   */
   readonly insertDist: number;
   /** 从发射点（本帧起点）到接触点的直线距离，用于远射奖励。 */
   readonly travelDistance: number;
@@ -174,13 +181,16 @@ export function sweepProjectile(
     y: projectile.pos.y + (end.y - projectile.pos.y) * bestT
   };
   const stopped: Projectile = { ...projectile, pos: contact };
+  // 锚定在被打中那颗球上：靠生成口一侧半个 spacing，`insertMarble` 会把新球钳到紧贴它。
+  // 不做接触点的自由投影 —— 螺旋是自接近曲线，投影会甩到另一圈去（见模块头注释的实测数字）。
+  const struck = chain.marbles[bestIndex]!;
 
   return {
     projectile: stopped,
     hit: {
       marbleIndex: bestIndex,
       contact,
-      insertDist: projectDist(track, contact),
+      insertDist: struck.dist - chain.spacing * 0.5,
       travelDistance: Math.hypot(contact.x - projectile.pos.x, contact.y - projectile.pos.y)
     }
   };

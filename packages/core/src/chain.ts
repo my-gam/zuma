@@ -164,12 +164,16 @@ export function pushChain(chain: Chain, delta: number): Chain {
       marbles[i] = { id: cur.id, color: cur.color, dist: cur.dist + moving };
       continue;
     }
-    // `gap` 是 cur（靠洞口侧）与已经算好的后一颗之间的空隙。
+    // `gap` 是 cur（靠洞口侧）与后一颗之间的**原始**空隙。
     const gap = cur.dist - chain.marbles[i + 1]!.dist - spacing;
     if (delta > 0) {
       moving = Math.max(0, moving - Math.max(0, gap));
     } else {
-      moving = gap <= CONTACT_EPS ? delta : 0;
+      // 必须读 `moving` 而不是 `delta`：一旦某对之间有空隙，拉动就到此为止，
+      // 后面（靠洞口侧）的所有颗都得冻结。写错成 delta 会让「断开」这个状态传不下去，
+      // 隔着一道空隙又把前面的球拽回来 —— 前面的球倒着撞穿后面的球，链随即乱序，
+      // 而 `findInsertIndex` 是二分查找，此后每次插入的位置全都不可信。
+      moving = gap <= CONTACT_EPS ? moving : 0;
     }
     marbles[i] = { id: cur.id, color: cur.color, dist: cur.dist + moving };
   }
@@ -227,16 +231,19 @@ export function insertMarble(chain: Chain, options: InsertOptions): Chain {
     throw new RangeError(`插入颜色不合法：${String(color)}`);
   }
 
-  // 钳制到新球「贴在前一颗靠洞口侧之后」；每次钳制都可能让它落到更靠后的位置，故迭代。
+  // 只钳**一次**：新球最多贴到「靠洞口侧那颗」的后面 spacing 处，落点下标始终由原始命中点决定。
+  //
+  // 千万别写成「钳完拿新值重新二分、再钳」的循环 —— 相邻两球的 dist 差在浮点下并不严格等于
+  // spacing（`1521.8 - 34 = 1487.8000000000002` 而下一颗是 `1487.7999999999997`），于是重新二分
+  // 会跳到后一颗之后，front 变成它、limit 又退一格 —— 一路向链尾走过去。实测最狠的一例：
+  // 打在第 3 颗上，球却插到第 18 个球位（相隔 15 颗）。按链的不变量「相邻间距 ≥ spacing」，
+  // marbles[index].dist ≤ front.dist − spacing 恒成立，所以钳一次就是最终落点，无需迭代。
   let placed = requireFiniteDist(options.dist);
-  let index = findInsertIndex(chain, placed);
-  for (let guard = 0; guard <= chain.marbles.length; guard += 1) {
-    const front = index > 0 ? chain.marbles[index - 1] : undefined;
-    if (!front) break;
+  const index = findInsertIndex(chain, placed);
+  const front = index > 0 ? chain.marbles[index - 1] : undefined;
+  if (front) {
     const limit = front.dist - chain.spacing;
-    if (placed <= limit) break;
-    placed = limit;
-    index = findInsertIndex(chain, placed);
+    if (placed > limit) placed = limit;
   }
 
   const marbles: Marble[] = chain.marbles.map((m) => ({ ...m }));

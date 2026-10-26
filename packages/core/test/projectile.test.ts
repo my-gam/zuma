@@ -108,8 +108,22 @@ describe('sweepProjectile 扫掠命中', () => {
     expect(res.hit!.marbleIndex).toBe(1);
     expect(res.hit!.contact.x).toBeCloseTo(20, 6);
     expect(res.projectile.pos.x).toBeCloseTo(20, 6);
-    expect(res.hit!.insertDist).toBeCloseTo(20, 6); // 直线轨道上 dist == x
+    expect(res.hit!.insertDist).toBeCloseTo(35, 6); // 锚定在红球（50）靠生成口侧半格
     expect(res.hit!.travelDistance).toBeCloseTo(20, 6);
+  });
+
+  it('insertDist 锚定在被击中的那颗球上，而不是接触点的自由投影', () => {
+    const chain = twoBalls();
+    const res = sweepProjectile(shooter(), 1000, chain, FLAT);
+    const struck = chain.marbles[res.hit!.marbleIndex]!;
+    // 接触点在 x=20。直线轨道上「投影弧长」恰好也是 20，可那已经是红球后面一整格的位置，
+    // 与被打中的是谁无关；换成自接近的螺旋轨道，这种自由投影会直接甩到另一圈去（实测差 5~15 个球位）。
+    expect(res.hit!.insertDist).toBeCloseTo(struck.dist - chain.spacing / 2, 9);
+    const after = insertMarble(chain, { dist: res.hit!.insertDist, color: 'purple', id: 99 });
+    const newIndex = after.marbles.findIndex((m) => m.id === 99);
+    const struckIndex = after.marbles.findIndex((m) => m.id === struck.id);
+    expect(Math.abs(newIndex - struckIndex)).toBe(1); // 必须紧挨着被打中那颗
+    expect(after.marbles[newIndex]!.dist).toBeCloseTo(struck.dist - chain.spacing, 9);
   });
 
   it('高速一帧跨过两颗球也不会隧穿（不会打穿到后面那颗）', () => {

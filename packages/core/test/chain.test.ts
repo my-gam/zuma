@@ -183,6 +183,25 @@ describe('pushChain 接触传播', () => {
     expect(dists(chain)).toEqual([20, 10, 0]);
   });
 
+  it('倒退的拉动到此为止 —— 空隙之后的球不得隔着空隙被拽回来', () => {
+    // 头 → 尾：orange@100 紧贴 red@90；red 与 green@0 之间空 80；green 紧贴 blue@-10。
+    const chain: Chain = {
+      spacing: SPACING,
+      marbles: [
+        { id: 0, color: 'orange', dist: 100 },
+        { id: 1, color: 'red', dist: 90 },
+        { id: 2, color: 'green', dist: 0 },
+        { id: 3, color: 'blue', dist: -SPACING }
+      ]
+    };
+    const moved = pushChain(chain, -4);
+    // 后串（green、blue）被吸回入口；前串（orange、red）中间隔着空隙，吸不到，必须冻结。
+    expect(dists(moved)).toEqual([100, 90, -4, -14]);
+    // 曾经写错成读 delta：orange 会被隔着空隙拽到 96，压进 red（41.7 < spacing）——链随即乱序。
+    expect(gapAfter(moved, 0)).toBeGreaterThanOrEqual(0);
+    expect(gapAfter(moved, 1)).toBeGreaterThanOrEqual(0);
+  });
+
   it('尾球恒被入口推着走 —— 断开只停前段，不存在永久停摆', () => {
     let chain = brokenChain();
     for (let step = 0; step < 50; step += 1) {
@@ -264,6 +283,35 @@ describe('insertMarble 挤压传播', () => {
     expect(() => insertMarble(chain, { dist: 0, color: 'pink' as never, id: 1 })).toThrow(
       RangeError
     );
+  });
+
+  it('挤满的链里插入只让位一格，钳制不得沿链尾级联（浮点相等边界）', () => {
+    // 复刻第 12 关的实测现场：spacing 34、一串紧贴的球，命中点落在两颗之间偏靠洞口那侧。
+    const spacing = 34;
+    const packed = [];
+    let d = 1555.8;
+    for (let i = 0; i < 30; i += 1) {
+      packed.push({ id: i, color: 'red' as const, dist: d });
+      d -= spacing; // 逐颗相减才会浮出「差 1 ulp」的边界，正是级联的触发条件
+    }
+    const chain: Chain = { spacing, marbles: packed };
+    const before = chain.marbles.map((m) => m.dist);
+
+    const out = insertMarble(chain, { dist: 1499.4, color: 'purple', id: 999 });
+    const newIndex = out.marbles.findIndex((m) => m.id === 999);
+    // 降序数组：idx0=1555.8、idx1=1521.8、idx2=1487.8…，新球钳到 idx1 后面一格 = idx2。
+    expect(newIndex).toBe(2);
+    expect(out.marbles[newIndex]!.dist).toBeCloseTo(1521.8 - spacing, 9);
+    // 每颗原有球最多只让位一个 spacing（级联的话会连着退十几格）。
+    for (const m of out.marbles) {
+      if (m.id === 999) continue;
+      const was = before[m.id]!;
+      expect(was - m.dist).toBeLessThanOrEqual(spacing + 1e-9);
+      expect(m.dist).toBeLessThanOrEqual(was + 1e-9); // 只往生成口退，不会往洞口挤
+    }
+    for (let i = 0; i < out.marbles.length - 1; i += 1) {
+      expect(gapAfter(out, i)).toBeGreaterThanOrEqual(0); // 仍然不嵌球
+    }
   });
 });
 

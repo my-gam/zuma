@@ -799,4 +799,46 @@ describe('倒退段（第 4 关起）', () => {
       expect(game.getState().direction, `level ${level}`).toBe(1);
     }
   });
+
+  it('倒退吸回入口时链必须始终严格降序、相邻不重叠（拉动不得越过空隙）', () => {
+    // 第 4 关是最早带倒退段的关卡：随机打法制造空隙，再让倒退段把后串吸回入口。
+    const game = new Zuma({
+      level: 4,
+      rng: lcg(51),
+      samplesPerSegment: 2,
+      autosaveMs: 0,
+      autoNextMs: 0
+    });
+    const track = game.getTrack();
+    const launcher = game.getLauncher();
+    const rnd = lcg(52);
+    let sawRewind = false;
+    let framesWithGap = 0;
+
+    for (let frame = 0; frame < 6_000; frame += 1) {
+      const s = game.getState();
+      if (s.phase !== 'playing') break;
+      if (s.direction === -1) sawRewind = true;
+      if (!s.projectile && s.chain.marbles.length > 0 && rnd() < 0.5) {
+        const target = s.chain.marbles[Math.floor(rnd() * s.chain.marbles.length)]!;
+        const pose = marblePose(track, target);
+        game.aim(Math.atan2(pose.y - launcher.y, pose.x - launcher.x));
+        game.shoot();
+      }
+      advanceBy(game, 1);
+      const chain = game.getState().chain;
+      let hasGap = false;
+      for (let i = 0; i < chain.marbles.length - 1; i += 1) {
+        const gap = chain.marbles[i]!.dist - chain.marbles[i + 1]!.dist - chain.spacing;
+        // 重叠（gap < 0）意味着后一颗被前一颗倒着撞穿；链一旦乱序，
+        // findInsertIndex 的二分结果就全不可信，插入位置会跳到别处。
+        expect(gap).toBeGreaterThanOrEqual(-1e-6);
+        if (gap > chain.spacing) hasGap = true;
+      }
+      if (hasGap) framesWithGap += 1;
+    }
+    // 前提检查：这一局确实既进了倒退、也确实出现过空隙，否则上面的断言是空跑。
+    expect(sawRewind).toBe(true);
+    expect(framesWithGap).toBeGreaterThan(0);
+  });
 });
