@@ -10,6 +10,7 @@ import {
   levelById,
   marblePose,
   poseAt,
+  speedAt,
   writeJson,
   type Burst,
   type MarbleColor,
@@ -420,6 +421,135 @@ describe('链头位置是派生值（判负点不能漂移）', () => {
     expect(head.dist).toBeGreaterThanOrEqual(track.length - 1e-6);
     const at = poseAt(track, head.dist);
     expect(Math.hypot(at.x - hole.x, at.y - hole.y)).toBeLessThan(1e-6);
+  });
+});
+
+describe('推进按接触传播（断开的链要停住）', () => {
+  /**
+   * blue,blue | red,red,red | green,green（head→tail）：中段消合留下 3 颗宽的空隙。
+   * 断口两侧故意用**不同色**，否则合拢那一刻就会再消一波，观测不到「恢复推进」。
+   */
+  const SCENARIO = ['blue', 'blue', 'red', 'red', 'red', 'green', 'green'] as const;
+
+  it('中段消合后，靠洞口那一段原地冻结，只有后段被入口推着走', () => {
+    const { game } = gameWithChain(SCENARIO);
+    advanceBy(game, 1); // 第一步就把 red×3 消掉，断口形成
+    const s1 = game.getState();
+    expect(s1.chain.marbles.map((m) => m.color)).toEqual(['blue', 'blue', 'green', 'green']);
+    const front = s1.chain.marbles.slice(0, 2).map((m) => ({ id: m.id, dist: m.dist }));
+    const rear = s1.chain.marbles.slice(2).map((m) => ({ id: m.id, dist: m.dist }));
+    const gap = s1.chain.marbles[1]!.dist - s1.chain.marbles[2]!.dist - s1.chain.spacing;
+    expect(gap).toBeCloseTo(3 * s1.chain.spacing, 9); // 132 单位 = 3 颗球位
+
+    advanceBy(game, 300);
+    const s2 = game.getState();
+    for (const { id, dist } of front) {
+      const now = s2.chain.marbles.find((m) => m.id === id)!;
+      // 后面没有东西推它 —— 一位都不该动（旧模型这里会跑满 300 步链速）。
+      expect(now.dist).toBeCloseTo(dist, 9);
+    }
+    for (const { id, dist } of rear) {
+      const now = s2.chain.marbles.find((m) => m.id === id)!;
+      expect(now.dist).toBeGreaterThan(dist + 1); // 后段一直在推进，空隙在收缩
+    }
+  });
+
+  it('空隙按 1 倍链速闭合，追上那一刻前段才恢复推进', () => {
+    const { game } = gameWithChain(SCENARIO);
+    advanceBy(game, 1);
+    const spec = game.getSpec();
+    const frontId = game.getState().chain.marbles[0]!.id;
+
+    let frozen = 0;
+    let gapAtResume = Number.POSITIVE_INFINITY;
+    let stepAtResume = 0;
+    let movedAtResume = 0;
+    for (let i = 0; i < 4000; i += 1) {
+      const before = game.getState();
+      if (before.phase !== 'playing') break;
+      const idx = before.chain.marbles.findIndex((m) => m.id === frontId);
+      if (idx < 0) break; // 合拢后第二波连锁把它也消掉了
+      const was = before.chain.marbles[idx]!;
+      // 推进量要一路吃掉**所有**空隙才轮得到链头（不只是它后面那一对），所以取总和。
+      let gapBefore = 0;
+      for (let i = 0; i < before.chain.marbles.length - 1; i += 1) {
+        const a = before.chain.marbles[i]!;
+        const b = before.chain.marbles[i + 1]!;
+        gapBefore += Math.max(0, a.dist - b.dist - before.chain.spacing);
+      }
+      // 与引擎同一时刻取速率：子步末（speedAt(elapsedMs + dtMs)）。
+      const step =
+        speedAt(spec, (before.elapsedMs + PHYSICS.STEP_MS) / 1000) * (PHYSICS.STEP_MS / 1000);
+      advanceBy(game, 1);
+      const now = game.getState().chain.marbles.find((m) => m.id === frontId);
+      const moved = now ? now.dist - was.dist : Number.POSITIVE_INFINITY;
+      if (moved > 1e-9) {
+        gapAtResume = gapBefore;
+        stepAtResume = step;
+        movedAtResume = moved;
+        break;
+      }
+      frozen += 1;
+    }
+    // 132 单位空隙 / 每步 ~0.224 ≈ 589 步：绝不是「立刻」恢复，也不是永远不恢复。
+    expect(frozen).toBeGreaterThan(300);
+    expect(frozen).toBeLessThan(2000);
+    // 恢复推进的那一步，累计空隙必须已经小到一步就能吃光，
+    // 且链头拿到的推进量 = 步长 − 剩余空隙（先被空隙吃掉，剩余才轮到它）。
+    expect(gapAtResume).toBeLessThanOrEqual(stepAtResume + 1e-9);
+    expect(movedAtResume).toBeCloseTo(stepAtResume - gapAtResume, 9);
+  });
+
+  it('逐帧不变量：任何一颗的单帧位移都不超过应有链速（没有 2 倍速狂奔）', () => {
+    const { game } = gameWithChain([
+      'red',
+      'red',
+      'yellow',
+      'yellow',
+      'green',
+      'green',
+      'green',
+      'blue',
+      'blue',
+      'yellow',
+      'red',
+      'green'
+    ] as const);
+    const spec = game.getSpec();
+    const origin = game.getLauncher();
+    const rnd = lcg(99);
+    let checked = 0;
+
+    for (let frame = 0; frame < 4000; frame += 1) {
+      const before = game.getState();
+      if (before.phase !== 'playing') break;
+      if (!before.projectile && before.chain.marbles.length > 0 && rnd() < 0.4) {
+        const target = before.chain.marbles[Math.floor(rnd() * before.chain.marbles.length)]!;
+        const pose = marblePose(game.getTrack(), target);
+        game.aim(Math.atan2(pose.y - origin.y, pose.x - origin.x));
+        game.shoot();
+      }
+      // 引擎取的是**子步末**的速率（speedAt(elapsedMs + dtMs)），这里必须同一时刻，
+      // 否则速度剖面在爬升时会差出 1e-5 量级，把不变量测成假失败。
+      const limit =
+        speedAt(spec, (before.elapsedMs + PHYSICS.STEP_MS) / 1000) * (PHYSICS.STEP_MS / 1000) +
+        1e-9;
+      const prev = new Map(before.chain.marbles.map((m) => [m.id, m.dist]));
+      advanceBy(game, 1);
+      const after = game.getState();
+      // 命中插入会把后段整串向后挤（`insertMarble` 的挤压传播），那是另一套位移预算，
+      // 不属于「推进」不变量的管辖范围 —— 这一帧跳过，别把它当成违规。
+      if (after.hits === before.hits) {
+        for (const m of after.chain.marbles) {
+          const was = prev.get(m.id);
+          if (was === undefined) continue;
+          expect(Math.abs(m.dist - was)).toBeLessThanOrEqual(limit);
+          checked += 1;
+        }
+      }
+    }
+    // 保证这条不变量真的被比对过成千上万次，而不是循环没跑。
+    expect(checked).toBeGreaterThan(20_000);
   });
 });
 

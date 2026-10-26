@@ -12,7 +12,9 @@
  *    时间旅行调试，共享引用的链会让「上一帧」跟着一起变。
  *
  * 间隙语义：相邻两球的 `dist` 差恰好等于 `spacing` 表示紧贴；更大表示有空隙
- * （消合后会出现，由 `closeGaps` 让后段追近闭合）。
+ * （消合后会出现）。有空隙时**只有靠生成口那一段在动**：`pushChain` 从尾球往前
+ * 传播推进量，推进量先被空隙吃掉，闭合之后才轮到靠洞口那一段。所以「后面没有推
+ * 到」的前段会停在原地，直到空隙重新接上。
  */
 import { isMarbleColor, type MarbleColor } from './types';
 
@@ -119,6 +121,59 @@ export function advanceChain(chain: Chain, delta: number): Chain {
     spacing: chain.spacing,
     marbles: chain.marbles.map((m) => ({ id: m.id, color: m.color, dist: m.dist + delta }))
   };
+}
+
+/** 判「紧贴」的容差：小于它的空隙按没有空隙处理。 */
+const CONTACT_EPS = 1e-9;
+
+/**
+ * 按**接触传播**平移整条链：尾球（靠生成口那颗）恒定位移 `delta`（入口一直在推它），
+ * 往前每一颗能拿到多少推进量，取决于它和后面那颗之间还剩多少空隙要吃。
+ *
+ * 设第 `i` 颗（靠洞口侧）实际位移为 `m[i]`、它与后一颗之间的空隙为 `gap[i]`：
+ *
+ * - `delta > 0`（前进 / 推挤）：`m[尾] = delta`，`m[i] = max(0, m[i+1] - gap[i])`。
+ *   于是紧贴的串成一起走（`gap = 0` 时 `m[i] = m[i+1]`），而断开的前段**在空隙吃掉
+ *   推进量之前一步都不动** —— 后段以链速追上去，追上那一刻才轮到前段继续走。
+ *   一帧闭合不完的空隙按比例结转，所以**任何一颗的位移都不会超过 `delta`**，
+ *   不会出现「后段以 2 倍速狂奔」。
+ * - `delta < 0`（倒退 / 拉动）：入口把尾球往回吸，靠**粘着**带动前面那些：
+ *   `m[i] = m[i+1]`（当 `gap[i] = 0`）或 `0`（有空隙就拉不动）。
+ *   推挤是接触才传，拉动是断开即止，两者不对称是刻意的 —— 球不会互相吸附。
+ * - `delta = 0`：返回同一引用（状态机每帧都调，别白抄快照）。
+ *
+ * 不夹边界：`dist` 跌进负区间（被吸回入口外）是合法状态，由状态机裁决。
+ * 结果恒满足不变量「任意相邻间距 ≥ `spacing`」，即不会出现两球互相嵌入。
+ *
+ * @throws RangeError `delta` 非有限数
+ */
+export function pushChain(chain: Chain, delta: number): Chain {
+  if (!Number.isFinite(delta)) {
+    throw new RangeError(`delta 必须是有限数，收到 ${delta}`);
+  }
+  const count = chain.marbles.length;
+  if (delta === 0 || count === 0) return chain;
+
+  const { spacing } = chain;
+  const marbles: Marble[] = new Array<Marble>(count);
+  // 尾球无条件跟着入口走。
+  let moving = delta;
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const cur = chain.marbles[i]!;
+    if (i === count - 1) {
+      marbles[i] = { id: cur.id, color: cur.color, dist: cur.dist + moving };
+      continue;
+    }
+    // `gap` 是 cur（靠洞口侧）与已经算好的后一颗之间的空隙。
+    const gap = cur.dist - chain.marbles[i + 1]!.dist - spacing;
+    if (delta > 0) {
+      moving = Math.max(0, moving - Math.max(0, gap));
+    } else {
+      moving = gap <= CONTACT_EPS ? delta : 0;
+    }
+    marbles[i] = { id: cur.id, color: cur.color, dist: cur.dist + moving };
+  }
+  return { spacing, marbles };
 }
 
 /**
@@ -248,7 +303,7 @@ export function gapAfter(chain: Chain, index: number): number {
 /** 链上是否存在空隙（消合后未闭合）。 */
 export function hasGaps(chain: Chain): boolean {
   for (let i = 0; i < chain.marbles.length - 1; i += 1) {
-    if (gapAfter(chain, i) > 1e-9) return true;
+    if (gapAfter(chain, i) > CONTACT_EPS) return true;
   }
   return false;
 }

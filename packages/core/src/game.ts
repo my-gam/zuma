@@ -8,8 +8,9 @@
  *    在不同设备上会跑出不同结果，而且高速弹球在大间隔下更容易穿球。所以内部按固定步长
  *    累积推进，并给单次 `tick` 的追进步数封顶：切后台回来只会「原地稍等」，不会一睁眼
  *    球已进洞。
- * 2. **连锁是涌现出来的，不是写死的**。插入后先只有断口两侧的球；后段随时间追近
- *    （`closeGaps`），追上贴合的那一刻 `findRuns` 才发现新一串 → `combo` 自然 +1。
+ * 2. **连锁是涌现出来的，不是写死的**。消合留下断口后，只有靠生成口那一段还在被入口推着
+ *    前进（`pushChain` 按接触传播推进量），断口靠洞口那一段原地停住；追上贴合的那一刻
+ *    `findRuns` 才发现新一串 → `combo` 自然 +1。
  *    `combo` 只在「链上既无空隙又无可消串」时归零。
  * 3. **core 不放定时器、不查 DOM**。秒级展示（HUD 计时刷新）属适配层，本类只在 `tick`
  *    里累加 `elapsedMs`（沿用 sudoku 的分工结论）。
@@ -17,11 +18,10 @@
  * 依赖全部可注入（`rng` / `storage` / `clock`），所以整局能在 Node 里零 DOM 跑完并重放。
  */
 import {
-  advanceChain,
-  closeGaps,
   createChain,
   gapAfter,
   insertMarble,
+  pushChain,
   type Chain,
   type Marble,
   type MarbleId
@@ -565,21 +565,20 @@ export class Zuma {
     const seconds = dtMs / 1000;
     const base = this.state;
     const speed = speedAt(this.spec, (base.elapsedMs + dtMs) / 1000);
-    const deltaScale = speed * seconds;
 
-    // 1. 链前进 / 倒退。
+    // 1. 链前进 / 倒退 —— 推进量按**接触**从入口往前传播（`pushChain`）。
+    //    尾球恒以链速被入口推着走，能传到前面每一颗的推进量要先扣掉它与后一颗之间的
+    //    空隙：所以消合断开后，靠洞口那一段会**原地停住**，直到后段追上来重新接上。
+    //    这也保证任何一颗的单帧位移都不超过链速，不会出现后段 2 倍速狂奔。
     //    倒退不做「尾球不得越过生成口」的钳制：原版祖玛里彩球是从入口进出的一条长龙，
     //    倒退段就是把后段吸回入口外（`dist < 0`），渲染层按「不上屏」处理即可。
     //    一旦在这里钳死，倒退段就永远走不完，整关卡在 -1 方向上出不来。
     const decision = decideAdvance(this.steps, headDistOf(base.chain), this.rewind);
     this.rewind = decision.state;
     const delta = speed * seconds * decision.direction;
-    let chain = advanceChain(base.chain, delta);
+    let chain = pushChain(base.chain, delta);
 
-    // 2. 后段以链速追近，收拢消合留下的空隙
-    chain = closeGaps(chain, deltaScale);
-
-    // 3. 弹球扫掠与插入
+    // 2. 弹球扫掠与插入
     let projectile = base.projectile;
     let hits = base.hits;
     let score = base.score;
@@ -606,7 +605,7 @@ export class Zuma {
       }
     }
 
-    // 4. 消合检测（含空隙闭合后涌现的连锁）
+    // 3. 消合检测（含空隙闭合后涌现的连锁）
     const runs = findRuns(chain);
     if (runs.length > 0) {
       combo += 1;
@@ -621,21 +620,21 @@ export class Zuma {
       combo = 0;
     }
 
-    // 5. 爆点老化
+    // 4. 爆点老化
     const elapsedMs = base.elapsedMs + dtMs;
     if (bursts.length > 0) {
       const alive = bursts.filter((b) => elapsedMs - b.atMs < this.burstMs);
       if (alive.length !== bursts.length) bursts = alive;
     }
 
-    // 6. **链头位置一律从链反查**，绝不用累加出来的数。
+    // 5. **链头位置一律从链反查**，绝不用累加出来的数。
     //    之前 `headDist` 是 `base.headDist + delta` 一步步加出来的，可带头的球一旦被消掉，
     //    新链头是后面那颗（`dist` 更小），账上却还停在被打掉的位置继续前进 ——
     //    实测打 21 发后漂移 527 世界单位：球还在螺旋中段（离洞 376.7 / 世界 1000）就判了进洞。
     //    链是唯一事实源，插球、消合、倒退都改它，所以只信它。
     const headDist = headDistOf(chain);
 
-    // 7. 胜负判定
+    // 6. 胜负判定
     let phase: GamePhase = 'playing';
     let settled: number | null = null;
     if (chain.marbles.length === 0) {

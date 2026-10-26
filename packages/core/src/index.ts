@@ -29,6 +29,7 @@ export {
   insertMarble,
   isEmptyChain,
   marblesInWindow,
+  pushChain,
   tailOf
 } from './chain';
 export type { Chain, CreateChainOptions, InsertOptions, Marble, MarbleId } from './chain';

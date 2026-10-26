@@ -18,6 +18,7 @@ import {
   levelById,
   paletteFor,
   poseAt,
+  pushChain,
   sampleTrack,
   scoreMatch,
   sweepProjectile
@@ -37,6 +38,7 @@ describe('core barrel（index.ts 公共导出面）', () => {
     expect(typeof advanceChain).toBe('function');
     expect(typeof insertMarble).toBe('function');
     expect(typeof closeGaps).toBe('function');
+    expect(typeof pushChain).toBe('function');
     expect(typeof hasGaps).toBe('function');
     expect(typeof paletteFor).toBe('function');
     expect(typeof isMarbleColor).toBe('function');
